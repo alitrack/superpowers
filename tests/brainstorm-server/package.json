@@ -2,7 +2,7 @@
   "name": "brainstorm-server-tests",
   "version": "1.0.0",
   "scripts": {
-    "test": "node server.test.js && node structured-host.test.js && node structured-runtime.test.js && bash codex-background-guard.test.sh"
+    "test": "node server.test.js && node structured-host.test.js && node structured-runtime.test.js && node web-session-manager.test.js && node web-product.test.js && bash codex-background-guard.test.sh"
   },
   "dependencies": {
     "ws": "^8.19.0"

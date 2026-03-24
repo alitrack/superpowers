@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Brainstorm Workspace</title>
+  <style>
+    :root {
+      --bg: #f6f0e5;
+      --bg-noise: rgba(83, 52, 29, 0.05);
+      --panel: rgba(255, 251, 245, 0.92);
+      --panel-strong: #fffdf8;
+      --border: rgba(112, 84, 63, 0.16);
+      --border-strong: rgba(112, 84, 63, 0.28);
+      --text: #241913;
+      --muted: #7b675a;
+      --accent: #b6542d;
+      --accent-soft: rgba(182, 84, 45, 0.12);
+      --accent-deep: #66311d;
+      --shadow: 0 20px 60px rgba(56, 37, 24, 0.08);
+      --display-font: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, "URW Palladio L", serif;
+      --body-font: "Avenir Next", "Segoe UI", "Helvetica Neue", Helvetica, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--body-font);
+      background: var(--bg);
+      color: var(--text);
+      background-image:
+        radial-gradient(circle at top left, rgba(201, 151, 103, 0.14), transparent 26%),
+        radial-gradient(circle at 80% 12%, rgba(138, 168, 118, 0.12), transparent 22%),
+        linear-gradient(180deg, rgba(255,255,255,0.4), rgba(246,240,229,0.95));
+    }
+
+    .app-shell {
+      min-height: 100vh;
+      position: relative;
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr);
+      gap: 1.25rem;
+      padding: 1.25rem;
+    }
+
+    .app-shell::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(var(--bg-noise) 1px, transparent 1px),
+        linear-gradient(90deg, var(--bg-noise) 1px, transparent 1px);
+      background-size: 28px 28px;
+      opacity: 0.3;
+      mix-blend-mode: multiply;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 1.25rem;
+      align-self: start;
+      min-height: calc(100vh - 2.5rem);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.72), rgba(255,252,247,0.88)),
+        linear-gradient(135deg, rgba(201, 151, 103, 0.08), rgba(182, 84, 45, 0.03));
+      color: var(--text);
+      padding: 1.35rem;
+      display: grid;
+      gap: 1.1rem;
+      align-content: start;
+      border: 1px solid var(--border);
+      border-radius: 30px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+    }
+
+    .brand-mark {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.55rem;
+      padding: 0.4rem 0.7rem;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.65);
+      border: 1px solid var(--border);
+      width: fit-content;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--accent-deep);
+    }
+
+    .sidebar h1 {
+      font-family: var(--display-font);
+      font-size: 2rem;
+      line-height: 1;
+      margin: 0.4rem 0 0 0;
+      max-width: 7ch;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+    }
+
+    .sidebar p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.6;
+      max-width: 24ch;
+    }
+
+    .sidebar-actions {
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .sidebar button {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.75);
+      color: var(--text);
+      border-radius: 16px;
+      padding: 0.95rem 1rem;
+      text-align: left;
+      cursor: pointer;
+      font: inherit;
+      transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+      box-shadow: 0 8px 24px rgba(85, 54, 37, 0.05);
+    }
+
+    .sidebar button:hover {
+      transform: translateY(-1px);
+      border-color: var(--border-strong);
+      box-shadow: 0 16px 30px rgba(85, 54, 37, 0.1);
+      background: rgba(255, 255, 255, 0.92);
+    }
+
+    .session-list {
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .session-item {
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 0.95rem;
+      background: rgba(255, 255, 255, 0.7);
+      cursor: pointer;
+      transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+    }
+
+    .session-item.active {
+      background: linear-gradient(135deg, rgba(255,255,255,0.92), rgba(255, 239, 230, 0.95));
+      border-color: rgba(182, 84, 45, 0.36);
+      box-shadow: 0 16px 30px rgba(118, 63, 36, 0.11);
+      transform: translateY(-1px);
+    }
+
+    .session-item strong,
+    .session-item span {
+      display: block;
+    }
+
+    .session-item span {
+      margin-top: 0.25rem;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .main {
+      padding: 0.25rem 0.25rem 2rem 0;
+      display: grid;
+      gap: 1.25rem;
+      align-content: start;
+    }
+
+    .header-card,
+    .history-card,
+    .artifact-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 28px;
+      padding: 1.15rem 1.25rem;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+    }
+
+    .header-card h2 {
+      margin: 0 0 0.55rem 0;
+      font-family: var(--display-font);
+      font-size: clamp(2.3rem, 4vw, 4.4rem);
+      line-height: 0.96;
+      letter-spacing: -0.05em;
+      max-width: 10ch;
+      font-weight: 600;
+    }
+
+    .header-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 1rem;
+      max-width: 56ch;
+      line-height: 1.7;
+    }
+
+    .hero-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 200px;
+      gap: 1rem;
+      align-items: end;
+    }
+
+    .hero-note {
+      padding: 1rem;
+      border-radius: 22px;
+      background: rgba(255,255,255,0.82);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+
+    .hero-note strong {
+      display: block;
+      color: var(--accent-deep);
+      margin-bottom: 0.35rem;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 340px;
+      gap: 1.25rem;
+      align-items: start;
+    }
+
+    .panel-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--accent-deep);
+      margin-bottom: 0.6rem;
+    }
+
+    .session-stage {
+      background: var(--panel-strong);
+      border: 1px solid var(--border);
+      border-radius: 36px;
+      padding: 1.25rem;
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .session-stage::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(135deg, rgba(182, 84, 45, 0.06), transparent 30%),
+        linear-gradient(180deg, rgba(255,255,255,0.4), transparent 55%);
+      pointer-events: none;
+    }
+
+    .history-list {
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .history-item {
+      border-radius: 18px;
+      background: rgba(255,255,255,0.68);
+      border: 1px solid var(--border);
+      padding: 0.85rem 0.95rem;
+    }
+
+    .history-item strong,
+    .history-item span {
+      display: block;
+    }
+
+    .history-item span {
+      margin-top: 0.25rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .artifact-card[hidden] {
+      display: none;
+    }
+
+    .artifact-card {
+      margin-top: 1rem;
+      background: linear-gradient(180deg, rgba(255,248,239,0.94), rgba(255,255,255,0.88));
+    }
+
+    .artifact-preview {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: rgba(255,255,255,0.78);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 1rem;
+      font-size: 0.92rem;
+      margin-top: 0.75rem;
+      line-height: 1.7;
+      max-height: 420px;
+      overflow: auto;
+    }
+
+    .artifact-meta strong {
+      display: block;
+      font-family: var(--display-font);
+      font-size: 1.25rem;
+      margin-bottom: 0.35rem;
+    }
+
+    .artifact-meta div {
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .empty-copy {
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    @media (max-width: 1100px) {
+      .app-shell {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: static;
+        min-height: auto;
+      }
+
+      .layout,
+      .hero-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .app-shell {
+        padding: 0.8rem;
+      }
+
+      .sidebar,
+      .header-card,
+      .session-stage,
+      .history-card,
+      .artifact-card {
+        border-radius: 24px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div>
+        <div class="brand-mark">Draft Studio</div>
+        <h1>Brainstorm Workspace</h1>
+        <p>把模糊想法收敛成一条可落地的路径。这里更像编辑台，不像后台工具。</p>
+      </div>
+
+      <div class="sidebar-actions">
+        <button id="new-session-button">New Session</button>
+        <button id="new-summary-session-button">New Summary Session</button>
+      </div>
+
+      <div>
+        <div class="panel-label">Recent Sessions</div>
+        <div id="session-list" class="session-list"></div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <section class="header-card">
+        <div class="panel-label">Current Draft</div>
+        <div class="hero-row">
+          <div>
+            <h2 id="workspace-title">Brainstorm Workspace</h2>
+            <p id="workspace-subtitle">Create a session to begin.</p>
+          </div>
+          <div class="hero-note">
+            <strong>Working rhythm</strong>
+            一次只处理一个正式问题，让思路慢慢收敛，而不是一下堆满整页选择。
+          </div>
+        </div>
+      </section>
+
+      <div class="layout">
+        <section class="session-stage">
+          <div class="panel-label">Question Stage</div>
+          <section id="session-root"></section>
+        </section>
+
+        <aside>
+          <section class="history-card">
+            <div class="panel-label">Thread So Far</div>
+            <div id="history-list" class="history-list"></div>
+          </section>
+
+          <section id="artifact-card" class="artifact-card" hidden>
+            <div class="panel-label">Result Sheet</div>
+            <div id="artifact-meta" class="artifact-meta"></div>
+            <pre id="artifact-preview" class="artifact-preview"></pre>
+          </section>
+        </aside>
+      </div>
+    </main>
+  </div>
+
+  <!-- STRUCTURED_HOST_SCRIPT -->
+  <script>
+    window.addEventListener('load', () => {
+      const rootEl = document.getElementById('session-root');
+      const historyEl = document.getElementById('history-list');
+      const sessionListEl = document.getElementById('session-list');
+      const titleEl = document.getElementById('workspace-title');
+      const subtitleEl = document.getElementById('workspace-subtitle');
+      const artifactCardEl = document.getElementById('artifact-card');
+      const artifactMetaEl = document.getElementById('artifact-meta');
+      const artifactPreviewEl = document.getElementById('artifact-preview');
+      const host = window.structuredBrainstorming.mountMessageHost(rootEl, {
+        showMeta: false,
+        onAnswer(answer) {
+          if (!window.currentSessionId) return;
+          submitAnswer(window.currentSessionId, answer);
+        }
+      });
+
+      function setSubtitle(text) {
+        subtitleEl.textContent = text;
+      }
+
+      async function api(method, url, body) {
+        const response = await fetch(url, {
+          method,
+          headers: body ? { 'Content-Type': 'application/json' } : {},
+          body: body ? JSON.stringify(body) : undefined
+        });
+
+        if (!response.ok) {
+          throw new Error(`Request failed: ${response.status}`);
+        }
+
+        return response.json();
+      }
+
+      function renderHistory(session) {
+        const history = Array.isArray(session.history) ? session.history : [];
+        if (history.length === 0) {
+          historyEl.innerHTML = '<div class="history-item"><strong>No answers yet</strong><span class="empty-copy">先回答当前问题，右侧会开始形成这轮收敛轨迹。</span></div>';
+          return;
+        }
+
+        historyEl.innerHTML = history.map((entry, index) => (
+          `<div class="history-item"><strong>Q${index + 1}: ${entry.question}</strong><span>${entry.answer}</span></div>`
+        )).join('');
+      }
+
+      async function renderArtifact(session) {
+        const message = session.currentMessage || {};
+        if (message.type !== 'artifact_ready') {
+          artifactCardEl.hidden = true;
+          artifactMetaEl.innerHTML = '';
+          artifactPreviewEl.textContent = '';
+          return;
+        }
+
+        artifactCardEl.hidden = false;
+        artifactMetaEl.innerHTML = `<strong>${message.title}</strong><div>${message.text}</div>`;
+        const response = await fetch(message.path);
+        artifactPreviewEl.textContent = await response.text();
+      }
+
+      function renderSessionList(items) {
+        if (!items.length) {
+          sessionListEl.innerHTML = '<div class="session-item"><strong>No sessions yet</strong><span>Create one to begin.</span></div>';
+          return;
+        }
+
+        sessionListEl.innerHTML = items.map((session) => (
+          `<div class="session-item${session.id === window.currentSessionId ? ' active' : ''}" data-session-id="${session.id}">` +
+            `<strong>${session.id.slice(0, 8)}</strong>` +
+            `<span>${session.currentMessageType || 'unknown'} · ${session.completionMode}</span>` +
+          `</div>`
+        )).join('');
+
+        Array.from(sessionListEl.querySelectorAll('[data-session-id]')).forEach((el) => {
+          el.addEventListener('click', () => {
+            loadSession(el.getAttribute('data-session-id'));
+          });
+        });
+      }
+
+      async function refreshSessionList() {
+        const sessions = await api('GET', '/api/sessions');
+        renderSessionList(sessions);
+        return sessions;
+      }
+
+      async function renderSession(session) {
+        window.currentSessionId = session.id;
+        titleEl.textContent = `Session ${session.id.slice(0, 8)}`;
+        setSubtitle(session.currentMessage.type === 'question'
+          ? '当前仍在提问阶段。先把这个问题答清，再进入下一步。'
+          : session.currentMessage.type === 'summary'
+            ? '这轮已经收敛成摘要，你可以继续回看这条路径。'
+            : '这轮已经形成可交付结果，右侧可直接查看输出。');
+        host.renderMessage(session.currentMessage);
+        renderHistory(session);
+        await renderArtifact(session);
+        await refreshSessionList();
+      }
+
+      async function createSession(completionMode) {
+        const session = await api('POST', '/api/sessions', { completionMode });
+        await renderSession(session);
+      }
+
+      async function loadSession(sessionId) {
+        const session = await api('GET', `/api/sessions/${sessionId}`);
+        await renderSession(session);
+      }
+
+      async function submitAnswer(sessionId, answer) {
+        const session = await api('POST', `/api/sessions/${sessionId}/answers`, answer);
+        await renderSession(session);
+      }
+
+      document.getElementById('new-session-button').addEventListener('click', () => createSession('artifact'));
+      document.getElementById('new-summary-session-button').addEventListener('click', () => createSession('summary'));
+
+      refreshSessionList()
+        .then((sessions) => {
+          if (sessions.length > 0) {
+            return loadSession(sessions[0].id);
+          }
+          return createSession('artifact');
+        })
+        .catch((error) => {
+          rootEl.innerHTML = `<div class="history-card"><strong>Failed to load app</strong><span>${error.message}</span></div>`;
+        });
+    });
+  </script>
+</body>
+</html>

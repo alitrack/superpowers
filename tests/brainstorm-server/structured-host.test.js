@@ -81,6 +81,11 @@ function runTests() {
     assert(html.includes('structured-answer-input'));
   });
 
+  test('renders options without inline toggleSelect dependency', () => {
+    const html = host.buildQuestionMarkup(pickOneQuestion, []);
+    assert(!html.includes('onclick="toggleSelect(this)"'));
+  });
+
   test('renders confirm questions with default yes/no options', () => {
     const html = host.buildQuestionMarkup(confirmQuestion, []);
     assert(html.includes('data-choice="yes"'));

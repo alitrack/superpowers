@@ -348,26 +348,75 @@
     const style = document.createElement('style');
     style.id = 'structured-brainstorming-styles';
     style.textContent = [
-      '.structured-host { max-width: 920px; margin: 0 auto; }',
-      '.structured-host .question-card, .structured-host .summary-card-shell { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 18px; padding: 1.5rem; }',
+      '.structured-host { max-width: 100%; position: relative; z-index: 1; }',
+      '.structured-host .question-card, .structured-host .summary-card-shell { background: rgba(255,255,255,0.72); border: 1px solid rgba(112, 84, 63, 0.12); border-radius: 30px; padding: 1.25rem 1.25rem 1.35rem; box-shadow: 0 24px 50px rgba(70, 44, 28, 0.07); }',
       '.structured-host .meta-row { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 1rem; }',
-      '.structured-host .meta-pill { padding: 0.4rem 0.7rem; border-radius: 999px; background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-secondary); font-size: 0.78rem; }',
-      '.structured-host .stack { display: grid; gap: 0.85rem; }',
+      '.structured-host .meta-pill { padding: 0.4rem 0.7rem; border-radius: 999px; background: rgba(255,255,255,0.74); border: 1px solid rgba(112, 84, 63, 0.14); color: var(--muted, #7b675a); font-size: 0.75rem; }',
+      '.structured-host .label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent-deep, #66311d); margin-bottom: 0.7rem; }',
+      '.structured-host h2 { font-family: var(--display-font, serif); font-size: clamp(2rem, 3.5vw, 3.5rem); line-height: 0.98; letter-spacing: -0.05em; margin: 0 0 0.75rem 0; max-width: 12ch; }',
+      '.structured-host .subtitle { font-size: 1.02rem; line-height: 1.75; color: var(--muted, #7b675a); margin-bottom: 1.4rem; max-width: 54ch; }',
+      '.structured-host .stack { display: grid; gap: 0.9rem; }',
       '.structured-host .question-form { display: grid; gap: 1rem; }',
-      '.structured-host textarea { width: 100%; min-height: 92px; resize: vertical; padding: 0.75rem; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-primary); color: var(--text-primary); font: inherit; }',
-      '.structured-host .helper-copy { font-size: 0.85rem; color: var(--text-secondary); }',
-      '.structured-host .error-copy { color: var(--error); min-height: 1.2rem; }',
-      '.structured-host .actions-row { display: flex; gap: 0.75rem; flex-wrap: wrap; }',
-      '.structured-host .history-list { display: grid; gap: 0.7rem; margin-top: 1rem; }',
-      '.structured-host .history-item { background: var(--bg-primary); border: 1px solid var(--border); border-radius: 14px; padding: 0.9rem 1rem; }'
+      '.structured-host .options { display: grid; gap: 0.85rem; }',
+      '.structured-host .option { background: rgba(255,255,255,0.8); border: 1px solid rgba(112, 84, 63, 0.14); border-radius: 22px; padding: 1rem 1.05rem; cursor: pointer; transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, background 180ms ease; display: flex; align-items: flex-start; gap: 0.95rem; }',
+      '.structured-host .option:hover { transform: translateY(-1px); border-color: rgba(182, 84, 45, 0.32); box-shadow: 0 16px 28px rgba(115, 66, 39, 0.08); }',
+      '.structured-host .option.selected { background: linear-gradient(135deg, rgba(255,255,255,0.96), rgba(255, 240, 229, 0.98)); border-color: rgba(182, 84, 45, 0.45); box-shadow: 0 16px 30px rgba(115, 66, 39, 0.11); }',
+      '.structured-host .option .letter { width: 2rem; height: 2rem; border-radius: 999px; background: rgba(182, 84, 45, 0.1); color: var(--accent-deep, #66311d); display: flex; align-items: center; justify-content: center; font-size: 0.78rem; font-weight: 700; flex-shrink: 0; }',
+      '.structured-host .option.selected .letter { background: var(--accent, #b6542d); color: white; }',
+      '.structured-host .option .content h3 { font-size: 1rem; margin: 0 0 0.2rem 0; color: var(--text, #241913); }',
+      '.structured-host .option .content p { color: var(--muted, #7b675a); line-height: 1.65; margin: 0; font-size: 0.92rem; }',
+      '.structured-host textarea { width: 100%; min-height: 118px; resize: vertical; padding: 0.95rem 1rem; border: 1px solid rgba(112, 84, 63, 0.18); border-radius: 18px; background: rgba(255,255,255,0.78); color: var(--text, #241913); font: inherit; line-height: 1.65; }',
+      '.structured-host textarea:focus { outline: none; border-color: rgba(182, 84, 45, 0.42); box-shadow: 0 0 0 4px rgba(182, 84, 45, 0.1); }',
+      '.structured-host .helper-copy { font-size: 0.88rem; color: var(--muted, #7b675a); line-height: 1.65; }',
+      '.structured-host .error-copy { color: #b42318; min-height: 1.2rem; font-size: 0.9rem; }',
+      '.structured-host .actions-row { display: flex; gap: 0.75rem; flex-wrap: wrap; padding-top: 0.15rem; }',
+      '.structured-host .mock-button { appearance: none; border: 1px solid rgba(182, 84, 45, 0.22); background: linear-gradient(135deg, #b6542d, #d37339); color: white; border-radius: 999px; padding: 0.8rem 1.25rem; font: inherit; font-weight: 600; letter-spacing: 0.01em; box-shadow: 0 18px 28px rgba(139, 76, 46, 0.18); cursor: pointer; }',
+      '.structured-host .mock-button:hover { filter: saturate(1.03) brightness(1.02); }',
+      '.structured-host .history-list { display: grid; gap: 0.75rem; margin-top: 1rem; }',
+      '.structured-host .history-item { background: rgba(255,255,255,0.7); border: 1px solid rgba(112, 84, 63, 0.12); border-radius: 18px; padding: 0.95rem 1rem; }',
+      '.structured-host .history-item strong { display: block; margin-bottom: 0.3rem; }',
+      '.structured-host .history-item span { color: var(--muted, #7b675a); line-height: 1.65; display: block; }'
     ].join('\n');
     document.head.appendChild(style);
   }
 
-  function buildQuestionMarkup(question, history) {
-    const options = getOptions(question);
+  function toggleOptionSelection(optionEl) {
+    const container = optionEl.closest('.options') || optionEl.closest('.cards');
+    const multi = Boolean(container && container.hasAttribute('data-multiselect'));
+    if (container && !multi) {
+      container.querySelectorAll('.option.selected, .card.selected').forEach((el) => {
+        if (el !== optionEl) el.classList.remove('selected');
+      });
+    }
+
+    if (multi) {
+      optionEl.classList.toggle('selected');
+    } else {
+      optionEl.classList.add('selected');
+    }
+  }
+
+  function bindOptionInteractions(rootEl) {
+    const optionEls = Array.from(rootEl.querySelectorAll('[data-option-id]'));
+    optionEls.forEach((optionEl) => {
+      optionEl.addEventListener('click', () => {
+        toggleOptionSelection(optionEl);
+      });
+      optionEl.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          toggleOptionSelection(optionEl);
+        }
+      });
+    });
+  }
+
+  function buildQuestionMarkup(question, history, options) {
+    const config = options || {};
+    const questionOptions = getOptions(question);
     const multi = question.questionType === QUESTION_TYPES.PICK_MANY;
     const allowText = question.questionType === QUESTION_TYPES.ASK_TEXT || question.allowTextOverride;
+    const showMeta = Boolean(config.showMeta);
     const meta = [
       `<div class="meta-pill">type: ${escapeHtml(question.questionType)}</div>`,
       `<div class="meta-pill">questionId: ${escapeHtml(question.questionId)}</div>`
@@ -377,11 +426,11 @@
       meta.push(`<div class="meta-pill">history: ${history.length}</div>`);
     }
 
-    const optionMarkup = options.length === 0
+    const optionMarkup = questionOptions.length === 0
       ? ''
       : `<div class="options stack"${multi ? ' data-multiselect' : ''}>` +
-        options.map((option, index) => (
-          `<div class="option" data-choice="${escapeHtml(option.id)}" data-option-id="${escapeHtml(option.id)}" role="button" tabindex="0" onclick="toggleSelect(this)">` +
+        questionOptions.map((option, index) => (
+          `<div class="option" data-choice="${escapeHtml(option.id)}" data-option-id="${escapeHtml(option.id)}" role="button" tabindex="0">` +
             `<div class="letter">${String.fromCharCode(65 + index)}</div>` +
             `<div class="content">` +
               `<h3>${escapeHtml(option.label)}</h3>` +
@@ -401,16 +450,16 @@
     return (
       `<div class="structured-host">` +
         `<div class="question-card">` +
-          `<div class="label">Question</div>` +
+          `<div class="label">Current Question</div>` +
           `<h2>${escapeHtml(question.title)}</h2>` +
           `<p class="subtitle">${escapeHtml(question.description || '')}</p>` +
-          `<div class="meta-row">${meta.join('')}</div>` +
+          (showMeta ? `<div class="meta-row">${meta.join('')}</div>` : '') +
           `<form class="question-form" data-role="question-form">` +
             optionMarkup +
             textMarkup +
-            `<div class="helper-copy">One active question at a time. You can select options, type text, or combine both when the question allows it.</div>` +
+            `<div class="helper-copy">一次只回答一个正式问题。可以点选，也可以直接输入；如果你的答案超出选项，系统会保留你的原话。</div>` +
             `<div class="error-copy" data-role="error"></div>` +
-            `<div class="actions-row"><button type="submit" class="mock-button" data-role="submit">Submit answer</button></div>` +
+            `<div class="actions-row"><button type="submit" class="mock-button" data-role="submit">Continue</button></div>` +
           `</form>` +
         `</div>` +
       `</div>`
@@ -431,8 +480,8 @@
     return (
       `<div class="structured-host">` +
         `<div class="summary-card-shell">` +
-          `<div class="label">Summary</div>` +
-          `<h2>Structured brainstorming summary</h2>` +
+          `<div class="label">Draft Summary</div>` +
+          `<h2>What this round converged to</h2>` +
           `<p class="subtitle">${escapeHtml(summary.text)}</p>` +
           `<div class="history-list">` +
             entries.map((entry) => (
@@ -448,12 +497,12 @@
     return (
       `<div class="structured-host">` +
         `<div class="summary-card-shell">` +
-          `<div class="label">Artifact Ready</div>` +
+          `<div class="label">Result Ready</div>` +
           `<h2>${escapeHtml(message.title)}</h2>` +
           `<p class="subtitle">${escapeHtml(message.text)}</p>` +
           `<div class="history-list">` +
-            `<div class="history-item"><strong>type</strong><span>${escapeHtml(message.artifactType)}</span></div>` +
-            `<div class="history-item"><strong>path</strong><span>${escapeHtml(message.path)}</span></div>` +
+            `<div class="history-item"><strong>Format</strong><span>${escapeHtml(message.artifactType)}</span></div>` +
+            `<div class="history-item"><strong>Location</strong><span>${escapeHtml(message.path)}</span></div>` +
           `</div>` +
         `</div>` +
       `</div>`
@@ -467,14 +516,16 @@
 
   function mountMessageHost(rootEl, config) {
     const onAnswer = typeof config.onAnswer === 'function' ? config.onAnswer : function() {};
+    const showMeta = Boolean(config.showMeta);
     const document = rootEl.ownerDocument;
     ensureHostStyles(document);
 
     function renderMessage(message) {
       if (message.type === 'question') {
         const history = Array.isArray(message.history) ? message.history : [];
-        rootEl.innerHTML = buildQuestionMarkup(message, history);
+        rootEl.innerHTML = buildQuestionMarkup(message, history, { showMeta });
         setIndicator(message.title);
+        bindOptionInteractions(rootEl);
 
         const form = rootEl.querySelector('[data-role="question-form"]');
         form.addEventListener('submit', (event) => {
@@ -525,8 +576,10 @@
   function mountDemoHost(rootEl, config) {
     const flow = config.flow;
     const onMessage = typeof config.onMessage === 'function' ? config.onMessage : function() {};
+    const showMeta = Boolean(config.showMeta);
     let session = createSession(flow);
     const messageHost = mountMessageHost(rootEl, {
+      showMeta,
       onAnswer(answer) {
         onMessage(answer);
         const next = applyAnswer(session, answer);

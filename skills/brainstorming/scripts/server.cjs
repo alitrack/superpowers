@@ -99,11 +99,14 @@ h1 { color: #333; } p { color: #666; }</style>
 const frameTemplate = fs.readFileSync(path.join(__dirname, 'frame-template.html'), 'utf-8');
 const helperScript = fs.readFileSync(path.join(__dirname, 'helper.js'), 'utf-8');
 const structuredHostScript = fs.readFileSync(path.join(__dirname, 'structured-host.cjs'), 'utf-8');
-const structuredRuntime = require('./structured-runtime.cjs');
+const webAppShellTemplate = fs.readFileSync(path.join(__dirname, 'web-app-shell.html'), 'utf-8');
+const { createSessionManager } = require('./web-session-manager.cjs');
 const helperInjection =
   '<script>\n' + helperScript + '\n</script>\n' +
   '<script>\n' + structuredHostScript + '\n</script>';
-const demoRuntime = structuredRuntime.createStructuredRuntime();
+const webSessionManager = createSessionManager({
+  dataDir: path.join(SCREEN_DIR, '.web-product')
+});
 
 // ========== Helper Functions ==========
 
@@ -114,6 +117,13 @@ function isFullDocument(html) {
 
 function wrapInFrame(content) {
   return frameTemplate.replace('<!-- CONTENT -->', content);
+}
+
+function renderWebAppShell() {
+  return webAppShellTemplate.replace(
+    '<!-- STRUCTURED_HOST_SCRIPT -->',
+    '<script>\n' + structuredHostScript + '\n</script>'
+  );
 }
 
 function getNewestScreen() {
@@ -127,11 +137,107 @@ function getNewestScreen() {
   return files.length > 0 ? files[0].path : null;
 }
 
+function sendJson(res, statusCode, payload) {
+  res.writeHead(statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify(payload));
+}
+
+function sendText(res, statusCode, body, contentType) {
+  res.writeHead(statusCode, { 'Content-Type': contentType || 'text/plain; charset=utf-8' });
+  res.end(body);
+}
+
+function parseJsonBody(req, callback) {
+  let body = '';
+  req.on('data', (chunk) => { body += chunk; });
+  req.on('end', () => {
+    if (!body.trim()) {
+      callback(null, {});
+      return;
+    }
+    try {
+      callback(null, JSON.parse(body));
+    } catch (error) {
+      callback(error);
+    }
+  });
+}
+
+function handleApiRequest(req, res, pathname) {
+  if (req.method === 'GET' && pathname === '/api/sessions') {
+    sendJson(res, 200, webSessionManager.listSessions());
+    return;
+  }
+
+  if (req.method === 'POST' && pathname === '/api/sessions') {
+    parseJsonBody(req, (error, body) => {
+      if (error) {
+        sendJson(res, 400, { error: 'Invalid JSON body' });
+        return;
+      }
+      const completionMode = body.completionMode === 'summary' ? 'summary' : 'artifact';
+      sendJson(res, 200, webSessionManager.createSession({ completionMode }));
+    });
+    return;
+  }
+
+  const artifactMatch = pathname.match(/^\/api\/sessions\/([^/]+)\/artifacts\/current$/);
+  if (req.method === 'GET' && artifactMatch) {
+    try {
+      const artifactText = webSessionManager.getArtifactContent(artifactMatch[1]);
+      sendText(res, 200, artifactText, 'text/markdown; charset=utf-8');
+    } catch (error) {
+      sendJson(res, 404, { error: error.message });
+    }
+    return;
+  }
+
+  const sessionMatch = pathname.match(/^\/api\/sessions\/([^/]+)$/);
+  if (req.method === 'GET' && sessionMatch) {
+    try {
+      sendJson(res, 200, webSessionManager.getSession(sessionMatch[1]));
+    } catch (error) {
+      sendJson(res, 404, { error: error.message });
+    }
+    return;
+  }
+
+  const answerMatch = pathname.match(/^\/api\/sessions\/([^/]+)\/answers$/);
+  if (req.method === 'POST' && answerMatch) {
+    parseJsonBody(req, (error, body) => {
+      if (error) {
+        sendJson(res, 400, { error: 'Invalid JSON body' });
+        return;
+      }
+      try {
+        sendJson(res, 200, webSessionManager.submitAnswer(answerMatch[1], body));
+      } catch (submitError) {
+        sendJson(res, 404, { error: submitError.message });
+      }
+    });
+    return;
+  }
+
+  sendJson(res, 404, { error: 'Not found' });
+}
+
 // ========== HTTP Request Handler ==========
 
 function handleRequest(req, res) {
   touchActivity();
-  if (req.method === 'GET' && req.url === '/') {
+  const pathname = new URL(req.url, 'http://localhost').pathname;
+
+  if (req.method === 'GET' && pathname === '/app') {
+    sendText(res, 200, renderWebAppShell(), 'text/html; charset=utf-8');
+    return;
+  }
+
+  if (pathname.startsWith('/api/')) {
+    handleApiRequest(req, res, pathname);
+    return;
+  }
+
+  if (req.method === 'GET' && pathname === '/') {
     const screenFile = getNewestScreen();
     let html = screenFile
       ? (raw => isFullDocument(raw) ? raw : wrapInFrame(raw))(fs.readFileSync(screenFile, 'utf-8'))
@@ -166,6 +272,7 @@ function handleRequest(req, res) {
 // ========== WebSocket Connection Handling ==========
 
 const clients = new Set();
+const socketSessions = new Map();
 
 function sendSocketMessage(socket, msg) {
   socket.write(encodeFrame(OPCODES.TEXT, Buffer.from(JSON.stringify(msg))));
@@ -185,7 +292,9 @@ function handleUpgrade(req, socket) {
 
   let buffer = Buffer.alloc(0);
   clients.add(socket);
-  sendSocketMessage(socket, demoRuntime.getCurrentMessage());
+  const session = webSessionManager.createSession({ completionMode: 'summary' });
+  socketSessions.set(socket, session.id);
+  sendSocketMessage(socket, session.currentMessage);
 
   socket.on('data', (chunk) => {
     buffer = Buffer.concat([buffer, chunk]);
@@ -203,11 +312,12 @@ function handleUpgrade(req, socket) {
 
       switch (result.opcode) {
         case OPCODES.TEXT:
-          handleMessage(result.payload.toString());
+          handleMessage(socket, result.payload.toString());
           break;
         case OPCODES.CLOSE:
           socket.end(encodeFrame(OPCODES.CLOSE, Buffer.alloc(0)));
           clients.delete(socket);
+          socketSessions.delete(socket);
           return;
         case OPCODES.PING:
           socket.write(encodeFrame(OPCODES.PONG, result.payload));
@@ -219,17 +329,24 @@ function handleUpgrade(req, socket) {
           closeBuf.writeUInt16BE(1003);
           socket.end(encodeFrame(OPCODES.CLOSE, closeBuf));
           clients.delete(socket);
+          socketSessions.delete(socket);
           return;
         }
       }
     }
   });
 
-  socket.on('close', () => clients.delete(socket));
-  socket.on('error', () => clients.delete(socket));
+  socket.on('close', () => {
+    clients.delete(socket);
+    socketSessions.delete(socket);
+  });
+  socket.on('error', () => {
+    clients.delete(socket);
+    socketSessions.delete(socket);
+  });
 }
 
-function handleMessage(text) {
+function handleMessage(socket, text) {
   let event;
   try {
     event = JSON.parse(text);
@@ -245,7 +362,9 @@ function handleMessage(text) {
   }
 
   if (event.type === 'answer') {
-    broadcast(demoRuntime.applyAnswer(event));
+    const sessionId = socketSessions.get(socket);
+    if (!sessionId) return;
+    sendSocketMessage(socket, webSessionManager.submitAnswer(sessionId, event).currentMessage);
   }
 }
 
