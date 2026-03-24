@@ -1,0 +1,67 @@
+<style>
+  .structured-demo-intro {
+    background:
+      radial-gradient(circle at top left, rgba(0, 113, 227, 0.16), transparent 34%),
+      linear-gradient(135deg, rgba(0, 113, 227, 0.1), rgba(52, 199, 89, 0.08));
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 1.5rem 1.5rem 1.25rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .structured-demo-intro .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.7rem;
+    border-radius: 999px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.9rem;
+  }
+
+  .structured-demo-intro p {
+    max-width: 760px;
+    color: var(--text-secondary);
+    margin: 0;
+  }
+</style>
+
+<div class="structured-demo-intro">
+  <div class="eyebrow">Structured Brainstorming Demo</div>
+  <h2>Schema-driven one-question flow</h2>
+  <p>
+    This demo is rendered inside the brainstorm frame template, so it uses the same shared
+    visual shell as the other companion screens. The backend-style flow still controls which
+    question appears next; the host only renders the active question and normalizes the answer.
+  </p>
+</div>
+
+<div id="structured-demo-root"></div>
+
+<script>
+  window.addEventListener('load', () => {
+    const messageHost = window.structuredBrainstorming.mountMessageHost(
+      document.getElementById('structured-demo-root'),
+      {
+        onAnswer(message) {
+          if (window.brainstorm) {
+            window.brainstorm.send(message);
+          }
+        }
+      }
+    );
+
+    if (window.brainstorm && typeof window.brainstorm.onMessage === 'function') {
+      window.brainstorm.onMessage((message) => {
+        if (['question', 'summary', 'artifact_ready'].includes(message.type)) {
+          messageHost.renderMessage(message);
+        }
+      });
+    }
+  });
+</script>

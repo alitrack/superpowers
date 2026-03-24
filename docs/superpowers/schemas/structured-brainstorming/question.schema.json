@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/superpowers/structured-brainstorming/question.schema.json",
+  "title": "Structured Brainstorming Question",
+  "description": "One formal answerable question in a structured brainstorming session.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "questionType",
+    "questionId",
+    "title",
+    "description",
+    "allowTextOverride",
+    "metadata"
+  ],
+  "properties": {
+    "type": {
+      "const": "question"
+    },
+    "questionType": {
+      "$ref": "#/$defs/questionType"
+    },
+    "questionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "options": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/option"
+      },
+      "minItems": 1
+    },
+    "allowTextOverride": {
+      "type": "boolean"
+    },
+    "textOverrideLabel": {
+      "type": "string",
+      "minLength": 1
+    },
+    "metadata": {
+      "$ref": "#/$defs/questionMetadata"
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/historyAnswer"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "questionType": {
+            "enum": [
+              "pick_one",
+              "pick_many"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "options"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "questionType": {
+            "const": "confirm"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/option"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "questionType": {
+            "const": "ask_text"
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "required": [
+            "options"
+          ]
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "questionType": {
+      "type": "string",
+      "enum": [
+        "pick_one",
+        "pick_many",
+        "confirm",
+        "ask_text"
+      ]
+    },
+    "option": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string"
+        },
+        "disabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "historyAnswer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "questionId",
+        "answer"
+      ],
+      "properties": {
+        "questionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "answer": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "questionMetadata": {
+      "type": "object",
+      "required": [
+        "step",
+        "path",
+        "expectsArtifact"
+      ],
+      "properties": {
+        "step": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "path": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "expectsArtifact": {
+          "type": "string",
+          "enum": [
+            "summary",
+            "artifact_ready"
+          ]
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

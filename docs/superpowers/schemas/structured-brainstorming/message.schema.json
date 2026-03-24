@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/superpowers/structured-brainstorming/message.schema.json",
+  "title": "Structured Brainstorming Message",
+  "description": "Top-level union schema for structured brainstorming transport messages.",
+  "oneOf": [
+    {
+      "$ref": "./question.schema.json"
+    },
+    {
+      "$ref": "./answer.schema.json"
+    },
+    {
+      "$ref": "./summary.schema.json"
+    },
+    {
+      "$ref": "./artifact-ready.schema.json"
+    }
+  ]
+}

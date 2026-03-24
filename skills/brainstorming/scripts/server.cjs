@@ -98,7 +98,12 @@ h1 { color: #333; } p { color: #666; }</style>
 
 const frameTemplate = fs.readFileSync(path.join(__dirname, 'frame-template.html'), 'utf-8');
 const helperScript = fs.readFileSync(path.join(__dirname, 'helper.js'), 'utf-8');
-const helperInjection = '<script>\n' + helperScript + '\n</script>';
+const structuredHostScript = fs.readFileSync(path.join(__dirname, 'structured-host.cjs'), 'utf-8');
+const structuredRuntime = require('./structured-runtime.cjs');
+const helperInjection =
+  '<script>\n' + helperScript + '\n</script>\n' +
+  '<script>\n' + structuredHostScript + '\n</script>';
+const demoRuntime = structuredRuntime.createStructuredRuntime();
 
 // ========== Helper Functions ==========
 
@@ -162,6 +167,10 @@ function handleRequest(req, res) {
 
 const clients = new Set();
 
+function sendSocketMessage(socket, msg) {
+  socket.write(encodeFrame(OPCODES.TEXT, Buffer.from(JSON.stringify(msg))));
+}
+
 function handleUpgrade(req, socket) {
   const key = req.headers['sec-websocket-key'];
   if (!key) { socket.destroy(); return; }
@@ -176,6 +185,7 @@ function handleUpgrade(req, socket) {
 
   let buffer = Buffer.alloc(0);
   clients.add(socket);
+  sendSocketMessage(socket, demoRuntime.getCurrentMessage());
 
   socket.on('data', (chunk) => {
     buffer = Buffer.concat([buffer, chunk]);
@@ -229,10 +239,18 @@ function handleMessage(text) {
   }
   touchActivity();
   console.log(JSON.stringify({ source: 'user-event', ...event }));
-  if (event.choice) {
+  if (shouldPersistEvent(event)) {
     const eventsFile = path.join(SCREEN_DIR, '.events');
     fs.appendFileSync(eventsFile, JSON.stringify(event) + '\n');
   }
+
+  if (event.type === 'answer') {
+    broadcast(demoRuntime.applyAnswer(event));
+  }
+}
+
+function shouldPersistEvent(event) {
+  return Boolean(event.choice) || ['answer', 'summary', 'artifact_ready'].includes(event.type);
 }
 
 function broadcast(msg) {

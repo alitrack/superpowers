@@ -69,6 +69,7 @@ When calling this via the Bash tool, set `run_in_background: true`. Then read `$
 # switches to foreground mode. Run it normally — no extra flags needed.
 scripts/start-server.sh --project-dir /path/to/project
 ```
+Do not pass `--background` in Codex. The script now rejects that combination and tells you to use `--foreground` with the shell tool's own background execution mechanism.
 
 **Gemini CLI:**
 ```bash

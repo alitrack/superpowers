@@ -118,7 +118,7 @@ async function runTests() {
     await test('serves waiting page when no screens exist', async () => {
       const res = await fetch(`http://localhost:${TEST_PORT}/`);
       assert.strictEqual(res.status, 200);
-      assert(res.body.includes('Waiting for Claude'), 'Should show waiting message');
+      assert(res.body.includes('Waiting for the agent'), 'Should show waiting message');
     });
 
     await test('injects helper.js into waiting page', async () => {
@@ -126,6 +126,7 @@ async function runTests() {
       assert(res.body.includes('WebSocket'), 'Should have helper.js injected');
       assert(res.body.includes('toggleSelect'), 'Should have toggleSelect from helper');
       assert(res.body.includes('brainstorm'), 'Should have brainstorm API from helper');
+      assert(res.body.includes('structuredBrainstorming'), 'Should inject structured host API');
     });
 
     await test('returns Content-Type text/html', async () => {
@@ -146,7 +147,10 @@ async function runTests() {
 
     await test('wraps content fragments in frame template', async () => {
       const fragment = '<h2>Pick a layout</h2>\n<div class="options"><div class="option" data-choice="a"><div class="letter">A</div></div></div>';
-      fs.writeFileSync(path.join(TEST_DIR, 'fragment.html'), fragment);
+      const fragmentPath = path.join(TEST_DIR, 'fragment.html');
+      fs.writeFileSync(fragmentPath, fragment);
+      const newerTime = new Date(Date.now() + 2000);
+      fs.utimesSync(fragmentPath, newerTime, newerTime);
       await sleep(300);
 
       const res = await fetch(`http://localhost:${TEST_PORT}/`);
@@ -157,9 +161,12 @@ async function runTests() {
     });
 
     await test('serves newest file by mtime', async () => {
-      fs.writeFileSync(path.join(TEST_DIR, 'older.html'), '<h2>Older</h2>');
-      await sleep(100);
-      fs.writeFileSync(path.join(TEST_DIR, 'newer.html'), '<h2>Newer</h2>');
+      const olderPath = path.join(TEST_DIR, 'older.html');
+      const newerPath = path.join(TEST_DIR, 'newer.html');
+      fs.writeFileSync(olderPath, '<h2>Older</h2>');
+      fs.writeFileSync(newerPath, '<h2>Newer</h2>');
+      fs.utimesSync(olderPath, new Date(Date.now() + 3000), new Date(Date.now() + 3000));
+      fs.utimesSync(newerPath, new Date(Date.now() + 4000), new Date(Date.now() + 4000));
       await sleep(300);
 
       const res = await fetch(`http://localhost:${TEST_PORT}/`);
@@ -168,7 +175,9 @@ async function runTests() {
 
     await test('ignores non-html files for serving', async () => {
       // Write a newer non-HTML file — should still serve newest .html
-      fs.writeFileSync(path.join(TEST_DIR, 'data.json'), '{"not": "html"}');
+      const dataPath = path.join(TEST_DIR, 'data.json');
+      fs.writeFileSync(dataPath, '{"not": "html"}');
+      fs.utimesSync(dataPath, new Date(Date.now() + 5000), new Date(Date.now() + 5000));
       await sleep(300);
 
       const res = await fetch(`http://localhost:${TEST_PORT}/`);
@@ -190,6 +199,48 @@ async function runTests() {
         ws.on('open', resolve);
         ws.on('error', reject);
       });
+      ws.close();
+    });
+
+    await test('sends the initial structured question from the backend runtime', async () => {
+      const ws = new WebSocket(`ws://localhost:${TEST_PORT}`);
+      const message = await new Promise((resolve, reject) => {
+        ws.on('message', (data) => resolve(JSON.parse(data.toString())));
+        ws.on('error', reject);
+      });
+      assert.strictEqual(message.type, 'question');
+      assert.strictEqual(message.questionId, 'root-goal');
+      ws.close();
+    });
+
+    await test('returns the next structured message after an answer is submitted', async () => {
+      const ws = new WebSocket(`ws://localhost:${TEST_PORT}`);
+      const messages = [];
+      await new Promise((resolve, reject) => {
+        ws.on('open', resolve);
+        ws.on('error', reject);
+      });
+
+      await new Promise((resolve, reject) => {
+        ws.on('message', (data) => {
+          messages.push(JSON.parse(data.toString()));
+          if (messages.length === 2) resolve();
+        });
+        ws.send(JSON.stringify({
+          type: 'answer',
+          questionId: 'root-goal',
+          answerMode: 'option',
+          optionIds: ['requirements'],
+          text: null,
+          rawInput: '1'
+        }));
+        setTimeout(() => reject(new Error('Timed out waiting for structured runtime response')), 1000);
+      });
+
+      assert.strictEqual(messages[0].type, 'question');
+      assert.strictEqual(messages[0].questionId, 'root-goal');
+      assert.strictEqual(messages[1].type, 'question');
+      assert.strictEqual(messages[1].questionId, 'requirements-constraints');
       ws.close();
     });
 
@@ -237,6 +288,32 @@ async function runTests() {
 
       // Non-choice events should not create .events file
       assert(!fs.existsSync(eventsFile), '.events should not exist for non-choice events');
+      ws.close();
+    });
+
+    await test('writes schema-aligned answer events to .events file', async () => {
+      const eventsFile = path.join(TEST_DIR, '.events');
+      if (fs.existsSync(eventsFile)) fs.unlinkSync(eventsFile);
+
+      const ws = new WebSocket(`ws://localhost:${TEST_PORT}`);
+      await new Promise(resolve => ws.on('open', resolve));
+
+      ws.send(JSON.stringify({
+        type: 'answer',
+        questionId: 'root-goal',
+        answerMode: 'option',
+        optionIds: ['requirements'],
+        text: null,
+        rawInput: '1'
+      }));
+      await sleep(300);
+
+      assert(fs.existsSync(eventsFile), '.events should exist for answer events');
+      const lines = fs.readFileSync(eventsFile, 'utf-8').trim().split('\n');
+      const event = JSON.parse(lines[lines.length - 1]);
+      assert.strictEqual(event.type, 'answer');
+      assert.strictEqual(event.questionId, 'root-goal');
+      assert.strictEqual(event.optionIds[0], 'requirements');
       ws.close();
     });
 
@@ -390,6 +467,7 @@ async function runTests() {
       assert(helperContent.includes('sendEvent'), 'Should define sendEvent');
       assert(helperContent.includes('selectedChoice'), 'Should track selectedChoice');
       assert(helperContent.includes('brainstorm'), 'Should expose brainstorm API');
+      assert(helperContent.includes('setIndicator'), 'Should expose indicator helper');
       return Promise.resolve();
     });
 

@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/superpowers/structured-brainstorming/summary.schema.json",
+  "title": "Structured Brainstorming Summary",
+  "description": "A converged session summary when questioning is complete but the final artifact is not yet emitted.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "text",
+    "path",
+    "answers"
+  ],
+  "properties": {
+    "type": {
+      "const": "summary"
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "path": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "answers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/historyAnswer"
+      },
+      "minItems": 1
+    }
+  },
+  "$defs": {
+    "historyAnswer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "questionId",
+        "answer"
+      ],
+      "properties": {
+        "questionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "answer": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

@@ -12,7 +12,8 @@
 #                         Use 0.0.0.0 in remote/containerized environments.
 #   --url-host <host>     Hostname shown in returned URL JSON.
 #   --foreground          Run server in the current terminal (no backgrounding).
-#   --background          Force background mode (overrides Codex auto-foreground).
+#   --background          Force background mode in environments that can keep
+#                         detached child processes alive after shell exit.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -57,6 +58,11 @@ if [[ -z "$URL_HOST" ]]; then
   else
     URL_HOST="$BIND_HOST"
   fi
+fi
+
+if [[ "$FORCE_BACKGROUND" == "true" && -n "${CODEX_CI:-}" ]]; then
+  echo "{\"error\": \"Unsafe to use --background under CODEX_CI because detached child processes are reaped after shell exit. Use $SCRIPT_DIR/start-server.sh${PROJECT_DIR:+ --project-dir $PROJECT_DIR} --host $BIND_HOST --url-host $URL_HOST --foreground and run that command with your tool's background execution mode.\"}"
+  exit 1
 fi
 
 # Some environments reap detached/background processes. Auto-foreground when detected.

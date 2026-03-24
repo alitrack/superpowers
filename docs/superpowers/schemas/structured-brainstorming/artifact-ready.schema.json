@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/superpowers/structured-brainstorming/artifact-ready.schema.json",
+  "title": "Structured Brainstorming Artifact Ready",
+  "description": "A final message telling the host that a concrete artifact has been produced.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "artifactType",
+    "title",
+    "path",
+    "text"
+  ],
+  "properties": {
+    "type": {
+      "const": "artifact_ready"
+    },
+    "artifactType": {
+      "type": "string",
+      "enum": [
+        "markdown",
+        "json",
+        "text",
+        "html"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

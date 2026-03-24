@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/superpowers/structured-brainstorming/answer.schema.json",
+  "title": "Structured Brainstorming Answer",
+  "description": "A normalized answer submitted in response to a structured brainstorming question.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "questionId",
+    "answerMode",
+    "optionIds",
+    "text",
+    "rawInput"
+  ],
+  "properties": {
+    "type": {
+      "const": "answer"
+    },
+    "questionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "answerMode": {
+      "$ref": "#/$defs/answerMode"
+    },
+    "optionIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "text": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "rawInput": {
+      "type": "string"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "answerMode": {
+            "const": "option"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "optionIds": {
+            "minItems": 1,
+            "maxItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "answerMode": {
+            "const": "options"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "optionIds": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "answerMode": {
+            "const": "confirm"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "optionIds": {
+            "minItems": 1,
+            "maxItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "answerMode": {
+            "const": "text"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "optionIds": {
+            "maxItems": 0
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "answerMode": {
+            "const": "mixed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "optionIds": {
+            "minItems": 1
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "answerMode": {
+      "type": "string",
+      "enum": [
+        "option",
+        "options",
+        "confirm",
+        "text",
+        "mixed"
+      ]
+    }
+  }
+}

@@ -2,6 +2,8 @@
   const WS_URL = 'ws://' + window.location.host;
   let ws = null;
   let eventQueue = [];
+  const messageListeners = new Set();
+  let lastServerMessage = null;
 
   function connect() {
     ws = new WebSocket(WS_URL);
@@ -15,7 +17,10 @@
       const data = JSON.parse(msg.data);
       if (data.type === 'reload') {
         window.location.reload();
+        return;
       }
+      lastServerMessage = data;
+      messageListeners.forEach((listener) => listener(data));
     };
 
     ws.onclose = () => {
@@ -30,6 +35,12 @@
     } else {
       eventQueue.push(event);
     }
+  }
+
+  function setIndicator(text) {
+    const indicator = document.getElementById('indicator-text');
+    if (!indicator) return;
+    indicator.textContent = text;
   }
 
   // Capture clicks on choice elements
@@ -51,7 +62,7 @@
       const container = target.closest('.options') || target.closest('.cards');
       const selected = container ? container.querySelectorAll('.selected') : [];
       if (selected.length === 0) {
-        indicator.textContent = 'Click an option above, then return to the terminal';
+        setIndicator('Click an option above, then return to the terminal');
       } else if (selected.length === 1) {
         const label = selected[0].querySelector('h3, .content h3, .card-body h3')?.textContent?.trim() || selected[0].dataset.choice;
         indicator.innerHTML = '<span class="selected-text">' + label + ' selected</span> — return to terminal to continue';
@@ -81,7 +92,16 @@
   // Expose API for explicit use
   window.brainstorm = {
     send: sendEvent,
-    choice: (value, metadata = {}) => sendEvent({ type: 'choice', value, ...metadata })
+    choice: (value, metadata = {}) => sendEvent({ type: 'choice', value, ...metadata }),
+    setIndicator,
+    onMessage(handler) {
+      if (typeof handler !== 'function') return () => {};
+      messageListeners.add(handler);
+      if (lastServerMessage) {
+        handler(lastServerMessage);
+      }
+      return () => messageListeners.delete(handler);
+    }
   };
 
   connect();
