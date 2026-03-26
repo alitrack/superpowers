@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Brainstorm Workspace</title>
+  <title>Research Asset Workbench</title>
   <style>
     :root {
       --bg: #f6f0e5;
@@ -138,6 +138,43 @@
       gap: 0.75rem;
     }
 
+    .workbench-nav {
+      display: grid;
+      gap: 0.65rem;
+    }
+
+    .workbench-item {
+      display: grid;
+      gap: 0.25rem;
+      padding: 0.85rem 0.95rem;
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.7);
+      text-decoration: none;
+      color: inherit;
+      transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+      box-shadow: 0 8px 24px rgba(85, 54, 37, 0.05);
+    }
+
+    .workbench-item:hover {
+      transform: translateY(-1px);
+      border-color: var(--border-strong);
+      box-shadow: 0 16px 30px rgba(85, 54, 37, 0.1);
+      background: rgba(255, 255, 255, 0.92);
+    }
+
+    .workbench-item strong {
+      font-size: 0.95rem;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+    }
+
+    .workbench-item span {
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.5;
+    }
+
     .session-item {
       border: 1px solid var(--border);
       border-radius: 18px;
@@ -224,6 +261,85 @@
       margin-bottom: 0.35rem;
     }
 
+    .persistent-composer {
+      margin-top: 1rem;
+      padding: 1rem;
+      border-radius: 24px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.82);
+      display: grid;
+      gap: 0.8rem;
+    }
+
+    .persistent-composer strong {
+      display: block;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--accent-deep);
+    }
+
+    .persistent-composer p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.6;
+      max-width: 72ch;
+    }
+
+    .persistent-composer textarea {
+      width: 100%;
+      min-height: 110px;
+      resize: vertical;
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      padding: 0.95rem 1rem;
+      font: inherit;
+      color: var(--text);
+      background: rgba(255, 252, 247, 0.97);
+      line-height: 1.6;
+    }
+
+    .persistent-composer textarea:focus {
+      outline: 2px solid rgba(182, 84, 45, 0.16);
+      border-color: rgba(182, 84, 45, 0.42);
+    }
+
+    .persistent-composer .composer-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.8rem;
+    }
+
+    .persistent-composer .composer-actions button {
+      appearance: none;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      padding: 0.8rem 1.1rem;
+      cursor: pointer;
+      font: inherit;
+      background: rgba(255,255,255,0.9);
+      color: var(--text);
+      transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+    }
+
+    .persistent-composer .composer-actions button:hover {
+      transform: translateY(-1px);
+      border-color: rgba(182, 84, 45, 0.36);
+      box-shadow: 0 14px 26px rgba(86, 52, 33, 0.1);
+    }
+
+    .persistent-composer .composer-actions .primary {
+      background: linear-gradient(135deg, rgba(182, 84, 45, 0.92), rgba(138, 63, 32, 0.96));
+      border-color: rgba(120, 53, 28, 0.7);
+      color: #fff9f4;
+    }
+
+    .composer-error {
+      color: #9a2c1a;
+      font-size: 0.92rem;
+    }
+
     .layout {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 340px;
@@ -292,8 +408,6 @@
     }
 
     .artifact-preview {
-      white-space: pre-wrap;
-      word-break: break-word;
       background: rgba(255,255,255,0.78);
       border: 1px solid var(--border);
       border-radius: 18px;
@@ -303,6 +417,42 @@
       line-height: 1.7;
       max-height: 420px;
       overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .artifact-preview.rich-preview {
+      display: grid;
+      gap: 0.95rem;
+      white-space: normal;
+    }
+
+    .artifact-section {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 0.95rem;
+      background: rgba(255,255,255,0.74);
+    }
+
+    .artifact-section h4 {
+      margin: 0 0 0.35rem 0;
+      font-size: 0.98rem;
+      color: var(--accent-deep);
+    }
+
+    .artifact-section .artifact-caption {
+      margin: 0 0 0.7rem 0;
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+
+    .artifact-section .artifact-block {
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text);
+      line-height: 1.72;
+      font-size: 0.92rem;
     }
 
     .artifact-meta strong {
@@ -317,9 +467,189 @@
       line-height: 1.6;
     }
 
+    .mini-panel {
+      margin-top: 1rem;
+      padding: 1rem;
+      border-radius: 22px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.76);
+      display: grid;
+      gap: 0.7rem;
+    }
+
+    .mini-panel strong {
+      color: var(--accent-deep);
+      font-size: 0.95rem;
+    }
+
+    .mini-panel-list {
+      display: grid;
+      gap: 0.55rem;
+    }
+
+    .mini-panel-item {
+      padding: 0.75rem 0.8rem;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.72);
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 0.88rem;
+    }
+
+    .mini-panel-item.clickable {
+      cursor: pointer;
+      transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+    }
+
+    .mini-panel-item.clickable:hover {
+      transform: translateY(-1px);
+      border-color: rgba(182, 84, 45, 0.34);
+      box-shadow: 0 10px 18px rgba(86, 52, 33, 0.08);
+      background: rgba(255, 255, 255, 0.88);
+    }
+
+    .mini-panel-item.selected {
+      border-color: rgba(182, 84, 45, 0.38);
+      background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(255, 241, 233, 0.96));
+      color: var(--text);
+      box-shadow: 0 14px 28px rgba(118, 63, 36, 0.09);
+    }
+
+    .mini-panel-item strong {
+      color: var(--text);
+    }
+
+    .inline-kicker {
+      display: inline-block;
+      margin-bottom: 0.35rem;
+      padding: 0.15rem 0.45rem;
+      border-radius: 999px;
+      background: rgba(182, 84, 45, 0.1);
+      color: var(--accent-deep);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .preview-list {
+      margin: 0;
+      padding-left: 1.1rem;
+      display: grid;
+      gap: 0.32rem;
+      color: var(--muted);
+    }
+
+    .preview-grid {
+      display: grid;
+      gap: 0.75rem;
+    }
+
     .empty-copy {
       color: var(--muted);
       line-height: 1.7;
+    }
+
+    .seed-stage {
+      display: grid;
+      gap: 1rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    .seed-stage h3 {
+      margin: 0;
+      font-family: var(--display-font);
+      font-size: clamp(1.8rem, 3vw, 2.6rem);
+      line-height: 1;
+      letter-spacing: -0.04em;
+      font-weight: 600;
+    }
+
+    .seed-stage p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+      max-width: 62ch;
+    }
+
+    .seed-entry-card {
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.82);
+      border-radius: 26px;
+      padding: 1rem;
+      display: grid;
+      gap: 0.85rem;
+      box-shadow: 0 14px 30px rgba(71, 45, 30, 0.08);
+    }
+
+    .seed-entry-card label {
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.11em;
+      color: var(--accent-deep);
+    }
+
+    .seed-entry-card textarea {
+      width: 100%;
+      min-height: 150px;
+      resize: vertical;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      padding: 1rem 1.05rem;
+      font: inherit;
+      color: var(--text);
+      background: rgba(255, 252, 247, 0.96);
+      line-height: 1.7;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    }
+
+    .seed-entry-card textarea:focus {
+      outline: 2px solid rgba(182, 84, 45, 0.16);
+      border-color: rgba(182, 84, 45, 0.42);
+    }
+
+    .seed-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.8rem;
+    }
+
+    .seed-actions button {
+      appearance: none;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      padding: 0.85rem 1.15rem;
+      cursor: pointer;
+      font: inherit;
+      background: rgba(255, 255, 255, 0.9);
+      color: var(--text);
+      transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+    }
+
+    .seed-actions button:hover {
+      transform: translateY(-1px);
+      border-color: rgba(182, 84, 45, 0.36);
+      box-shadow: 0 16px 28px rgba(86, 52, 33, 0.1);
+    }
+
+    .seed-actions .primary {
+      background: linear-gradient(135deg, rgba(182, 84, 45, 0.92), rgba(138, 63, 32, 0.96));
+      border-color: rgba(120, 53, 28, 0.7);
+      color: #fff9f4;
+    }
+
+    .seed-hint {
+      display: grid;
+      gap: 0.35rem;
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.6;
+    }
+
+    .seed-error {
+      color: #9a2c1a;
+      font-size: 0.92rem;
     }
 
     @media (max-width: 1100px) {
@@ -358,13 +688,43 @@
     <aside class="sidebar">
       <div>
         <div class="brand-mark">Draft Studio</div>
-        <h1>Brainstorm Workspace</h1>
-        <p>把模糊想法收敛成一条可落地的路径。这里更像编辑台，不像后台工具。</p>
+        <h1>Research Asset Workbench</h1>
+        <p>把研究资产、项目资料、工作台和发布审阅放进同一个可追溯的流程里。</p>
       </div>
 
       <div class="sidebar-actions">
         <button id="new-session-button">New Session</button>
         <button id="new-summary-session-button">New Summary Session</button>
+      </div>
+
+      <div>
+        <div class="panel-label">Workbench</div>
+        <nav class="workbench-nav" aria-label="Research workbench navigation">
+          <a class="workbench-item" href="#research-assets">
+            <strong>Research Assets</strong>
+            <span>Capture and curate reusable research outputs.</span>
+          </a>
+          <a class="workbench-item" href="#project-library">
+            <strong>Project Library</strong>
+            <span>Keep briefs, references, and context close.</span>
+          </a>
+          <a class="workbench-item" href="#research-workspace">
+            <strong>Research Workspace</strong>
+            <span>Work through questions and converge to decisions.</span>
+          </a>
+          <a class="workbench-item" href="#publish-review">
+            <strong>Publish Review</strong>
+            <span>Gate what goes out with a lightweight review.</span>
+          </a>
+          <a class="workbench-item" href="#permissions-audit">
+            <strong>Permissions &amp; Audit</strong>
+            <span>Control access and keep a clean trail.</span>
+          </a>
+          <a class="workbench-item" href="#review-requests">
+            <strong>Review Requests</strong>
+            <span>Track what needs attention from reviewers.</span>
+          </a>
+        </nav>
       </div>
 
       <div>
@@ -378,7 +738,7 @@
         <div class="panel-label">Current Draft</div>
         <div class="hero-row">
           <div>
-            <h2 id="workspace-title">Brainstorm Workspace</h2>
+            <h2 id="workspace-title">Research Asset Workbench</h2>
             <p id="workspace-subtitle">Create a session to begin.</p>
           </div>
           <div class="hero-note">
@@ -386,12 +746,28 @@
             一次只处理一个正式问题，让思路慢慢收敛，而不是一下堆满整页选择。
           </div>
         </div>
+        <div class="persistent-composer">
+          <div>
+            <strong>Start A New Brainstorm</strong>
+            <p>这里永远都能直接抛出一个新问题。旧 session 可以保留回看，但不该挡住新一轮头脑风暴的入口。</p>
+          </div>
+          <textarea id="persistent-seed-input" placeholder="把这轮真正要讨论的问题、困境、冲突或目标张力写在这里。"></textarea>
+          <div class="composer-actions">
+            <button id="persistent-start-artifact" class="primary" type="button">Start Artifact Session</button>
+            <button id="persistent-start-summary" type="button">Start Summary Session</button>
+          </div>
+          <div id="persistent-seed-error" class="composer-error" hidden>先写下这轮真正要解决的问题，再开始。</div>
+        </div>
       </section>
 
       <div class="layout">
         <section class="session-stage">
           <div class="panel-label">Question Stage</div>
           <section id="session-root"></section>
+          <section id="research-assets" class="mini-panel">
+            <strong>Research Assets</strong>
+            <div id="asset-library-list" class="mini-panel-list"></div>
+          </section>
         </section>
 
         <aside>
@@ -400,10 +776,35 @@
             <div id="history-list" class="history-list"></div>
           </section>
 
+          <section id="project-library" class="mini-panel">
+            <strong>Project Library</strong>
+            <div id="project-library-list" class="mini-panel-list"></div>
+          </section>
+
+          <section id="publish-review" class="mini-panel">
+            <strong>Publish Review</strong>
+            <div id="publish-review-status" class="mini-panel-item">Publish checks and summary appear here when a workspace is ready.</div>
+          </section>
+
+          <section id="bundle-preview" class="mini-panel">
+            <strong>Published Bundle Preview</strong>
+            <div id="bundle-preview-status" class="mini-panel-item">Select a published asset to inspect its read-only bundle snapshot.</div>
+          </section>
+
+          <section id="permissions-audit" class="mini-panel">
+            <strong>Permissions &amp; Audit</strong>
+            <div id="audit-feed" class="mini-panel-list"></div>
+          </section>
+
+          <section id="review-requests" class="mini-panel">
+            <strong>Review Requests</strong>
+            <div id="review-request-queue" class="mini-panel-list"></div>
+          </section>
+
           <section id="artifact-card" class="artifact-card" hidden>
             <div class="panel-label">Result Sheet</div>
             <div id="artifact-meta" class="artifact-meta"></div>
-            <pre id="artifact-preview" class="artifact-preview"></pre>
+            <div id="artifact-preview" class="artifact-preview"></div>
           </section>
         </aside>
       </div>
@@ -421,6 +822,20 @@
       const artifactCardEl = document.getElementById('artifact-card');
       const artifactMetaEl = document.getElementById('artifact-meta');
       const artifactPreviewEl = document.getElementById('artifact-preview');
+      const assetLibraryListEl = document.getElementById('asset-library-list');
+      const projectLibraryListEl = document.getElementById('project-library-list');
+      const reviewRequestQueueEl = document.getElementById('review-request-queue');
+      const auditFeedEl = document.getElementById('audit-feed');
+      const publishReviewStatusEl = document.getElementById('publish-review-status');
+      const bundlePreviewStatusEl = document.getElementById('bundle-preview-status');
+      const persistentSeedInputEl = document.getElementById('persistent-seed-input');
+      const persistentSeedErrorEl = document.getElementById('persistent-seed-error');
+      const governanceHeaders = {
+        'x-role': 'Owner',
+        'x-actor-id': 'browser-user'
+      };
+      window.currentWorkspaceId = null;
+      window.currentAssetId = null;
       const host = window.structuredBrainstorming.mountMessageHost(rootEl, {
         showMeta: false,
         onAnswer(answer) {
@@ -433,10 +848,17 @@
         subtitleEl.textContent = text;
       }
 
+      function readPersistentSeed() {
+        return persistentSeedInputEl.value.trim();
+      }
+
       async function api(method, url, body) {
         const response = await fetch(url, {
           method,
-          headers: body ? { 'Content-Type': 'application/json' } : {},
+          headers: {
+            ...governanceHeaders,
+            ...(body ? { 'Content-Type': 'application/json' } : {})
+          },
           body: body ? JSON.stringify(body) : undefined
         });
 
@@ -447,8 +869,45 @@
         return response.json();
       }
 
+      function escapeHtml(value) {
+        return String(value == null ? '' : value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function getChecklistProgress(workflow) {
+        const items = workflow && Array.isArray(workflow.skillChecklist)
+          ? workflow.skillChecklist
+          : [];
+        const total = items.length;
+        const completed = items.filter((entry) => entry.status === 'completed' || entry.status === 'not_needed').length;
+        return { completed, total };
+      }
+
+      function buildArtifactSection(title, caption, body) {
+        if (!body) {
+          return '';
+        }
+        return (
+          `<section class="artifact-section">` +
+            `<h4>${escapeHtml(title)}</h4>` +
+            (caption ? `<div class="artifact-caption">${escapeHtml(caption)}</div>` : '') +
+            `<div class="artifact-block">${escapeHtml(body)}</div>` +
+          `</section>`
+        );
+      }
+
       function renderHistory(session) {
         const history = Array.isArray(session.history) ? session.history : [];
+        if (history.length === 0 && session.seedPrompt) {
+          historyEl.innerHTML = (
+            `<div class="history-item"><strong>Seed Topic</strong><span>${session.seedPrompt}</span></div>`
+          );
+          return;
+        }
         if (history.length === 0) {
           historyEl.innerHTML = '<div class="history-item"><strong>No answers yet</strong><span class="empty-copy">先回答当前问题，右侧会开始形成这轮收敛轨迹。</span></div>';
           return;
@@ -461,17 +920,193 @@
 
       async function renderArtifact(session) {
         const message = session.currentMessage || {};
-        if (message.type !== 'artifact_ready') {
-          artifactCardEl.hidden = true;
-          artifactMetaEl.innerHTML = '';
-          artifactPreviewEl.textContent = '';
+        const workflow = session.workflow || {};
+        const checklist = getChecklistProgress(workflow);
+
+        if (message.type === 'artifact_ready') {
+          artifactCardEl.hidden = false;
+          artifactMetaEl.innerHTML =
+            `<strong>${message.title}</strong>` +
+            `<div>${message.text}</div>` +
+            `<div style="margin-top:0.7rem;">This round is complete${checklist.total ? ` (${checklist.completed}/${checklist.total})` : ''}. The full result is shown directly below, so you do not need to open the path manually.</div>` +
+            (workflow.specArtifact
+              ? `<div style="margin-top:0.7rem;"><strong>Design spec</strong><br>${workflow.specArtifact.title}</div>`
+              : '') +
+            (workflow.planArtifact
+              ? `<div style="margin-top:0.7rem;"><strong>Implementation plan</strong><br>${workflow.planArtifact.title}</div>`
+              : '');
+          const response = await fetch(message.path);
+          const bundleText = await response.text();
+          artifactPreviewEl.classList.add('rich-preview');
+          artifactPreviewEl.innerHTML = (
+            buildArtifactSection(
+              'Result bundle',
+              'This is the combined package for this brainstorming round.',
+              bundleText
+            ) +
+            buildArtifactSection(
+              'Design spec',
+              workflow.specArtifact ? workflow.specArtifact.title : 'Generated design document',
+              workflow.specArtifact ? workflow.specArtifact.previewText : ''
+            ) +
+            buildArtifactSection(
+              'Implementation plan',
+              workflow.planArtifact ? workflow.planArtifact.title : 'Generated implementation plan',
+              workflow.planArtifact ? workflow.planArtifact.previewText : ''
+            )
+          );
           return;
         }
 
-        artifactCardEl.hidden = false;
-        artifactMetaEl.innerHTML = `<strong>${message.title}</strong><div>${message.text}</div>`;
-        const response = await fetch(message.path);
-        artifactPreviewEl.textContent = await response.text();
+        if (workflow.specArtifact || workflow.planArtifact) {
+          const activeArtifact = workflow.visibleStage && workflow.visibleStage.id === 'review-spec'
+            ? workflow.specArtifact
+            : (workflow.planArtifact || workflow.specArtifact);
+          artifactCardEl.hidden = false;
+          artifactPreviewEl.classList.remove('rich-preview');
+          artifactMetaEl.innerHTML =
+            `<strong>${activeArtifact.title}</strong>` +
+            `<div>${workflow.visibleStage && workflow.visibleStage.description ? workflow.visibleStage.description : 'Review the current draft.'}</div>`;
+          artifactPreviewEl.textContent = activeArtifact.previewText || '';
+          return;
+        }
+
+        artifactCardEl.hidden = true;
+        artifactPreviewEl.classList.remove('rich-preview');
+        artifactMetaEl.innerHTML = '';
+        artifactPreviewEl.textContent = '';
+      }
+
+      function renderBundlePreview(bundle) {
+        if (!bundle) {
+          bundlePreviewStatusEl.innerHTML = 'Select a published asset to inspect its read-only bundle snapshot.';
+          return;
+        }
+
+        const sourceWorkspace = bundle.sourceWorkspace && bundle.sourceWorkspace.id
+          ? `${bundle.sourceWorkspace.title || bundle.sourceWorkspace.id} (${bundle.sourceWorkspace.id})`
+          : (bundle.workspaceId || 'Unknown workspace');
+        const evidenceItems = Array.isArray(bundle.includedEvidence) ? bundle.includedEvidence : [];
+        const hypothesisItems = Array.isArray(bundle.includedHypotheses) ? bundle.includedHypotheses : [];
+        const judgmentItems = Array.isArray(bundle.includedJudgments) ? bundle.includedJudgments : [];
+        const conclusion = bundle.conclusion || null;
+
+        bundlePreviewStatusEl.innerHTML = (
+          `<div class="preview-grid">` +
+            `<div>` +
+              `<span class="inline-kicker">Read-only bundle</span>` +
+              `<strong>${escapeHtml(bundle.title || bundle.id)}</strong><br>` +
+              `v${escapeHtml(bundle.version || 1)} · ${escapeHtml(bundle.status || 'published')}<br>` +
+              `${escapeHtml(bundle.publishSummary || 'No publish summary yet.')}` +
+            `</div>` +
+            `<div class="mini-panel-item">` +
+              `<strong>Traceability</strong><br>` +
+              `Source workspace: ${escapeHtml(sourceWorkspace)}<br>` +
+              `Checkpoint refs: ${escapeHtml((bundle.checkpointRefs || []).length)} · Audit refs: ${escapeHtml((bundle.auditRefs || []).length)}` +
+            `</div>` +
+            `<div class="mini-panel-item">` +
+              `<strong>Research question</strong><br>` +
+              `${escapeHtml(bundle.researchQuestion && bundle.researchQuestion.title ? bundle.researchQuestion.title : 'Not captured')}` +
+            `</div>` +
+            `<div class="mini-panel-item">` +
+              `<strong>Hypotheses kept in snapshot</strong>` +
+              `<ul class="preview-list">` +
+                (hypothesisItems.length
+                  ? hypothesisItems.map((item) => `<li>${escapeHtml(item.title || item.id)} · ${escapeHtml(item.status || 'active')}</li>`).join('')
+                  : '<li>No hypotheses included.</li>') +
+              `</ul>` +
+            `</div>` +
+            `<div class="mini-panel-item">` +
+              `<strong>Accepted evidence referenced by confirmed judgments</strong>` +
+              `<ul class="preview-list">` +
+                (evidenceItems.length
+                  ? evidenceItems.map((item) => `<li>${escapeHtml(item.id)} · ${escapeHtml(item.sourceLocator || item.sourceFingerprint || 'source pending')}</li>`).join('')
+                  : '<li>No evidence included.</li>') +
+              `</ul>` +
+            `</div>` +
+            `<div class="mini-panel-item">` +
+              `<strong>Confirmed judgments</strong>` +
+              `<ul class="preview-list">` +
+                (judgmentItems.length
+                  ? judgmentItems.map((item) => `<li>${escapeHtml(item.id)} · evidence refs: ${escapeHtml((item.evidenceRefs || []).join(', ') || 'none')}</li>`).join('')
+                  : '<li>No confirmed judgments included.</li>') +
+              `</ul>` +
+            `</div>` +
+            `<div class="mini-panel-item">` +
+              `<strong>Conclusion / Next step</strong><br>` +
+              `${escapeHtml(conclusion && Array.isArray(conclusion.nextActions) ? conclusion.nextActions.join(' | ') : 'No conclusion captured')}` +
+            `</div>` +
+          `</div>`
+        );
+      }
+
+      function renderPublishReview(review) {
+        if (!review) {
+          publishReviewStatusEl.innerHTML = 'Publish checks and summary appear here when a workspace is ready.';
+          return;
+        }
+
+        const validation = review.validation || {};
+        const blockers = Array.isArray(validation.errorCodes) ? validation.errorCodes : [];
+        const warnings = Array.isArray(validation.warningCodes) ? validation.warningCodes : [];
+        publishReviewStatusEl.innerHTML = (
+          `<div class="preview-grid">` +
+            `<div>` +
+              `<span class="inline-kicker">${validation.ok ? 'Ready' : 'Blocked'}</span>` +
+              `<strong>${escapeHtml(review.workspace && review.workspace.title ? review.workspace.title : review.workspace.id)}</strong><br>` +
+              `Next publish version: v${escapeHtml(review.nextVersion || 1)}` +
+            `</div>` +
+            `<div class="mini-panel-item">` +
+              `<strong>Blocking checks</strong>` +
+              `<ul class="preview-list">` +
+                (blockers.length
+                  ? blockers.map((item) => `<li>${escapeHtml(item)}</li>`).join('')
+                  : '<li>No blocking errors.</li>') +
+              `</ul>` +
+            `</div>` +
+            `<div class="mini-panel-item">` +
+              `<strong>Warnings</strong>` +
+              `<ul class="preview-list">` +
+                (warnings.length
+                  ? warnings.map((item) => `<li>${escapeHtml(item)}</li>`).join('')
+                  : '<li>No warnings right now.</li>') +
+              `</ul>` +
+            `</div>` +
+            `<div class="mini-panel-item">` +
+              `<strong>Open publish approvals</strong><br>` +
+              `${escapeHtml((review.openReviewRequests || []).length)} request(s) waiting`
+            `</div>` +
+          `</div>`
+        );
+      }
+
+      function renderAuditFeed(items) {
+        if (!items.length) {
+          auditFeedEl.innerHTML = '<div class="mini-panel-item">Audit trail appears here for governed actions.</div>';
+          return;
+        }
+        auditFeedEl.innerHTML = items.map((item) => (
+          `<div class="mini-panel-item">` +
+            `<strong>${escapeHtml(item.action || 'audit')}</strong><br>` +
+            `${escapeHtml(item.actorRole || 'unknown role')} · ${escapeHtml(item.actorId || 'unknown actor')}<br>` +
+            `${escapeHtml(item.targetType || 'target')} · ${escapeHtml(item.targetId || 'n/a')}<br>` +
+            `${escapeHtml(item.timestamp || item.createdAt || '')}` +
+          `</div>`
+        )).join('');
+      }
+
+      function renderReviewRequests(items) {
+        if (!items.length) {
+          reviewRequestQueueEl.innerHTML = '<div class="mini-panel-item">No review requests yet.</div>';
+          return;
+        }
+        reviewRequestQueueEl.innerHTML = items.map((item) => (
+          `<div class="mini-panel-item">` +
+            `<strong>${escapeHtml(item.type || item.requestType || 'review-request')}</strong><br>` +
+            `${escapeHtml(item.status || 'open')} · assignee ${escapeHtml(item.assigneeId || 'unassigned')}<br>` +
+            `${escapeHtml(item.targetType || 'Target')} · ${escapeHtml(item.targetId || 'n/a')}` +
+          `</div>`
+        )).join('');
       }
 
       function renderSessionList(items) {
@@ -483,7 +1118,7 @@
         sessionListEl.innerHTML = items.map((session) => (
           `<div class="session-item${session.id === window.currentSessionId ? ' active' : ''}" data-session-id="${session.id}">` +
             `<strong>${session.id.slice(0, 8)}</strong>` +
-            `<span>${session.currentMessageType || 'unknown'} · ${session.completionMode}</span>` +
+            `<span>${session.workflowStageLabel || session.workflowStage || session.currentMessageType || 'unknown'} · ${session.completionMode}</span>` +
           `</div>`
         )).join('');
 
@@ -494,29 +1129,186 @@
         });
       }
 
+      async function loadResearchAssetPreview(assetId) {
+        if (!assetId) {
+          renderBundlePreview(null);
+          return;
+        }
+        try {
+          const asset = await api('GET', `/api/assets/${assetId}`);
+          renderBundlePreview(asset);
+        } catch (_error) {
+          bundlePreviewStatusEl.innerHTML = 'Published bundle preview is unavailable right now.';
+        }
+      }
+
+      async function refreshResearchAssets() {
+        try {
+          const payload = await api('GET', '/api/assets');
+          const items = Array.isArray(payload.items) ? payload.items : [];
+          if (!items.length) {
+            assetLibraryListEl.innerHTML = '<div class="mini-panel-item">No published assets yet.</div>';
+            window.currentAssetId = null;
+            renderBundlePreview(null);
+            return;
+          }
+
+          const nextAssetId = items.some((item) => item.id === window.currentAssetId)
+            ? window.currentAssetId
+            : items[0].id;
+          window.currentAssetId = nextAssetId;
+          assetLibraryListEl.innerHTML = items.map((item) => (
+            `<div class="mini-panel-item clickable${item.id === nextAssetId ? ' selected' : ''}" data-asset-id="${escapeHtml(item.id)}">` +
+              `<strong>${escapeHtml(item.title || item.id)}</strong><br>` +
+              `v${escapeHtml(item.version || 1)} · ${escapeHtml(item.status || 'published')}<br>` +
+              `${escapeHtml(item.publishSummary || 'Open the bundle preview to inspect this published snapshot.')}` +
+            `</div>`
+          )).join('');
+          Array.from(assetLibraryListEl.querySelectorAll('[data-asset-id]')).forEach((el) => {
+            el.addEventListener('click', async () => {
+              window.currentAssetId = el.getAttribute('data-asset-id');
+              await refreshResearchAssets();
+            });
+          });
+          await loadResearchAssetPreview(nextAssetId);
+        } catch (_error) {
+          assetLibraryListEl.innerHTML = '<div class="mini-panel-item">Assets are unavailable right now.</div>';
+          bundlePreviewStatusEl.innerHTML = 'Published bundle preview is unavailable right now.';
+        }
+      }
+
+      async function refreshWorkspaces(preferredWorkspaceId) {
+        try {
+          const payload = await api('GET', '/api/workspaces');
+          const items = Array.isArray(payload.items) ? payload.items : [];
+          if (!items.length) {
+            window.currentWorkspaceId = null;
+            projectLibraryListEl.innerHTML = '<div class="mini-panel-item">No research workspaces yet.</div>';
+            renderPublishReview(null);
+            renderAuditFeed([]);
+            renderReviewRequests([]);
+            return;
+          }
+
+          const nextWorkspaceId = items.some((item) => item.id === preferredWorkspaceId)
+            ? preferredWorkspaceId
+            : (items.some((item) => item.id === window.currentWorkspaceId) ? window.currentWorkspaceId : items[0].id);
+          window.currentWorkspaceId = nextWorkspaceId;
+          projectLibraryListEl.innerHTML = items.map((item) => (
+            `<div class="mini-panel-item clickable${item.id === nextWorkspaceId ? ' selected' : ''}" data-workspace-id="${escapeHtml(item.id)}">` +
+              `<strong>${escapeHtml(item.title || item.id)}</strong><br>` +
+              `${escapeHtml(item.status || 'draft')} · ${escapeHtml(item.team || 'no team')}<br>` +
+              `${escapeHtml(item.sourceBundleId ? `cloned from ${item.sourceBundleId}` : 'editable workspace')}` +
+            `</div>`
+          )).join('');
+          Array.from(projectLibraryListEl.querySelectorAll('[data-workspace-id]')).forEach((el) => {
+            el.addEventListener('click', async () => {
+              window.currentWorkspaceId = el.getAttribute('data-workspace-id');
+              await refreshWorkspaces(window.currentWorkspaceId);
+            });
+          });
+
+          const [publishReview, reviewRequests, auditEntries] = await Promise.all([
+            api('GET', `/api/workspaces/${nextWorkspaceId}/publish-review`),
+            api('GET', `/api/review-requests?workspaceId=${encodeURIComponent(nextWorkspaceId)}`),
+            api('GET', `/api/audit?workspaceId=${encodeURIComponent(nextWorkspaceId)}`)
+          ]);
+          renderPublishReview(publishReview);
+          renderReviewRequests(Array.isArray(reviewRequests.items) ? reviewRequests.items : []);
+          renderAuditFeed(Array.isArray(auditEntries.items) ? auditEntries.items : []);
+        } catch (_error) {
+          projectLibraryListEl.innerHTML = '<div class="mini-panel-item">Workspaces are unavailable right now.</div>';
+          publishReviewStatusEl.innerHTML = 'Publish review is unavailable right now.';
+          auditFeedEl.innerHTML = '<div class="mini-panel-item">Audit feed is unavailable right now.</div>';
+          reviewRequestQueueEl.innerHTML = '<div class="mini-panel-item">Review queue is unavailable right now.</div>';
+        }
+      }
+
+      async function refreshWorkbenchPanels(preferredWorkspaceId) {
+        await Promise.all([
+          refreshResearchAssets(),
+          refreshWorkspaces(preferredWorkspaceId || window.currentWorkspaceId)
+        ]);
+      }
+
       async function refreshSessionList() {
         const sessions = await api('GET', '/api/sessions');
         renderSessionList(sessions);
         return sessions;
       }
 
+      function renderEmptyStage() {
+        window.currentSessionId = null;
+        titleEl.textContent = 'Research Asset Workbench';
+        setSubtitle('先在上方写下本轮真正的问题，然后再进入正式脑暴。');
+        artifactCardEl.hidden = true;
+        artifactMetaEl.innerHTML = '';
+        artifactPreviewEl.textContent = '';
+        historyEl.innerHTML = '<div class="history-item"><strong>No session yet</strong><span class="empty-copy">上方输入议题后，这里才会开始显示一问一答的正式脑暴过程。</span></div>';
+        rootEl.innerHTML = (
+          '<div class="seed-stage">' +
+            '<div>' +
+              '<div class="panel-label">Question Stage</div>' +
+              '<h3>One entry point only.</h3>' +
+            '</div>' +
+            '<p>新一轮头脑风暴只从上方的常驻输入区开始。这里不再重复收集议题，只负责展示当前正式问题和收敛过程。</p>' +
+            '<div class="history-item">' +
+              '<strong>How to start</strong>' +
+              '<span>写下真正卡住你的问题，然后点击上方的 Start 按钮。旧 session 会保留在左侧，但不会要求你再输一遍。</span>' +
+            '</div>' +
+          '</div>'
+        );
+      }
+
       async function renderSession(session) {
         window.currentSessionId = session.id;
-        titleEl.textContent = `Session ${session.id.slice(0, 8)}`;
-        setSubtitle(session.currentMessage.type === 'question'
-          ? '当前仍在提问阶段。先把这个问题答清，再进入下一步。'
-          : session.currentMessage.type === 'summary'
-            ? '这轮已经收敛成摘要，你可以继续回看这条路径。'
-            : '这轮已经形成可交付结果，右侧可直接查看输出。');
+        const seedTitle = typeof session.seedPrompt === 'string' && session.seedPrompt.trim()
+          ? session.seedPrompt.trim()
+          : '';
+        const workflowStage = session.workflow && session.workflow.visibleStage
+          ? session.workflow.visibleStage
+          : null;
+        const checklist = getChecklistProgress(session.workflow || {});
+        const workspaceId = session.research && session.research.workspaceId
+          ? session.research.workspaceId
+          : window.currentWorkspaceId;
+        titleEl.textContent = seedTitle
+          ? seedTitle.slice(0, 72)
+          : `Session ${session.id.slice(0, 8)}`;
+        setSubtitle(session.currentMessage.type === 'artifact_ready'
+          ? `本轮头脑风暴已完成${checklist.total ? `（${checklist.completed}/${checklist.total}）` : ''}。右侧已经直接显示最终结果，不需要手动去路径里找文件；如果你想探索别的方向，直接从上方开始新一轮。`
+          : (workflowStage && workflowStage.description
+            ? workflowStage.description
+            : (session.currentMessage.type === 'question'
+              ? '当前仍在提问阶段。先把这个问题答清，再进入下一步。'
+              : session.currentMessage.type === 'summary'
+                ? '这轮已经收敛成摘要，你可以继续回看这条路径。'
+                : '这轮已经形成可交付结果，右侧可直接查看输出。')));
         host.renderMessage(session.currentMessage);
         renderHistory(session);
         await renderArtifact(session);
         await refreshSessionList();
+        await refreshWorkbenchPanels(workspaceId);
       }
 
-      async function createSession(completionMode) {
-        const session = await api('POST', '/api/sessions', { completionMode });
+      async function createSession(completionMode, initialPrompt) {
+        const session = await api('POST', '/api/sessions', {
+          completionMode,
+          initialPrompt,
+          workflowMode: 'full_skill'
+        });
         await renderSession(session);
+      }
+
+      async function startFromPersistentComposer(completionMode) {
+        const initialPrompt = readPersistentSeed();
+        if (!initialPrompt) {
+          persistentSeedErrorEl.hidden = false;
+          persistentSeedInputEl.focus();
+          return;
+        }
+        persistentSeedErrorEl.hidden = true;
+        await createSession(completionMode, initialPrompt);
       }
 
       async function loadSession(sessionId) {
@@ -529,15 +1321,22 @@
         await renderSession(session);
       }
 
-      document.getElementById('new-session-button').addEventListener('click', () => createSession('artifact'));
-      document.getElementById('new-summary-session-button').addEventListener('click', () => createSession('summary'));
+      document.getElementById('new-session-button').addEventListener('click', () => {
+        persistentSeedInputEl.focus();
+      });
+      document.getElementById('new-summary-session-button').addEventListener('click', () => {
+        persistentSeedInputEl.focus();
+      });
+      document.getElementById('persistent-start-artifact').addEventListener('click', () => startFromPersistentComposer('artifact'));
+      document.getElementById('persistent-start-summary').addEventListener('click', () => startFromPersistentComposer('summary'));
 
       refreshSessionList()
         .then((sessions) => {
           if (sessions.length > 0) {
             return loadSession(sessions[0].id);
           }
-          return createSession('artifact');
+          renderEmptyStage();
+          return refreshWorkbenchPanels();
         })
         .catch((error) => {
           rootEl.innerHTML = `<div class="history-card"><strong>Failed to load app</strong><span>${error.message}</span></div>`;

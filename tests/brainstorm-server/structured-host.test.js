@@ -98,6 +98,45 @@ function runTests() {
     assert(html.includes('textarea'));
   });
 
+  test('renders summary cards with a dedicated title and preserved multi-section text', () => {
+    const html = host.buildSummaryMarkup({
+      type: 'summary',
+      title: 'Recommendation: Guided question flow',
+      text: 'Recommendation\n- Choose: Guided question flow\n\nWhy This Path Currently Wins\n- It keeps one clear decision at a time.',
+      answers: []
+    }, []);
+    assert(html.includes('Recommendation: Guided question flow'));
+    assert(html.includes('summary-text'));
+    assert(html.includes('Why This Path Currently Wins'));
+  });
+
+  test('renders artifact-ready cards with preview text so the finished artifact is visible in the main stage', () => {
+    const html = host.buildArtifactReadyMarkup({
+      type: 'artifact_ready',
+      artifactType: 'markdown',
+      title: 'brainstorm-result.md',
+      text: 'Structured brainstorming artifact is ready.',
+      path: '/api/sessions/demo/artifacts/current',
+      artifactPreviewText: 'Recommendation\n- Choose: Guided question flow\n\nNext Actions\n- Prototype one full session.',
+      generatedArtifacts: [
+        { label: 'Design spec', title: 'Guided question flow design', path: 'docs/specs/demo.md' },
+        { label: 'Implementation plan', title: 'Guided question flow plan', path: 'docs/plans/demo.md' }
+      ],
+      nextActions: [
+        'Review the generated package.',
+        'Start a new round if the direction is off.'
+      ]
+    });
+    assert(html.includes('summary-text'));
+    assert(html.includes('Guided question flow'));
+    assert(html.includes('Next Actions'));
+    assert(html.includes('This brainstorming round is complete'));
+    assert(html.includes('What you can do next') || html.includes('Next 1'));
+    assert(html.includes('Guided question flow design'));
+    assert(html.includes('do not need to open the file path manually'));
+    assert(html.includes('Result panel'));
+  });
+
   test('structured demo is a fragment so frame styles can wrap it', () => {
     const demo = fs.readFileSync(DEMO_PATH, 'utf-8').trimStart().toLowerCase();
     assert(!demo.startsWith('<!doctype'), 'Demo should not be a full HTML document');

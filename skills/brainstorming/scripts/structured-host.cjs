@@ -355,7 +355,15 @@
       '.structured-host .label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent-deep, #66311d); margin-bottom: 0.7rem; }',
       '.structured-host h2 { font-family: var(--display-font, serif); font-size: clamp(2rem, 3.5vw, 3.5rem); line-height: 0.98; letter-spacing: -0.05em; margin: 0 0 0.75rem 0; max-width: 12ch; }',
       '.structured-host .subtitle { font-size: 1.02rem; line-height: 1.75; color: var(--muted, #7b675a); margin-bottom: 1.4rem; max-width: 54ch; }',
+      '.structured-host .summary-text { font-size: 1rem; line-height: 1.8; color: var(--muted, #7b675a); margin-bottom: 1.4rem; white-space: pre-wrap; }',
       '.structured-host .stack { display: grid; gap: 0.9rem; }',
+      '.structured-host .completion-note { margin-bottom: 1rem; background: linear-gradient(135deg, rgba(255,255,255,0.94), rgba(255, 241, 231, 0.98)); border: 1px solid rgba(182, 84, 45, 0.18); border-radius: 22px; padding: 1rem 1.05rem; }',
+      '.structured-host .completion-note strong { display: block; margin-bottom: 0.3rem; color: var(--text, #241913); }',
+      '.structured-host .completion-note span { display: block; color: var(--muted, #7b675a); line-height: 1.7; }',
+      '.structured-host .next-steps { display: grid; gap: 0.7rem; margin-top: 1rem; }',
+      '.structured-host .next-steps .step-item { background: rgba(255,255,255,0.72); border: 1px solid rgba(112, 84, 63, 0.12); border-radius: 18px; padding: 0.9rem 1rem; }',
+      '.structured-host .next-steps .step-item strong { display: block; margin-bottom: 0.25rem; }',
+      '.structured-host .next-steps .step-item span { display: block; color: var(--muted, #7b675a); line-height: 1.65; }',
       '.structured-host .question-form { display: grid; gap: 1rem; }',
       '.structured-host .options { display: grid; gap: 0.85rem; }',
       '.structured-host .option { background: rgba(255,255,255,0.8); border: 1px solid rgba(112, 84, 63, 0.14); border-radius: 22px; padding: 1rem 1.05rem; cursor: pointer; transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, background 180ms ease; display: flex; align-items: flex-start; gap: 0.95rem; }',
@@ -481,8 +489,8 @@
       `<div class="structured-host">` +
         `<div class="summary-card-shell">` +
           `<div class="label">Draft Summary</div>` +
-          `<h2>What this round converged to</h2>` +
-          `<p class="subtitle">${escapeHtml(summary.text)}</p>` +
+          `<h2>${escapeHtml(summary.title || 'What this round converged to')}</h2>` +
+          `<div class="summary-text">${escapeHtml(summary.text)}</div>` +
           `<div class="history-list">` +
             entries.map((entry) => (
               `<div class="history-item"><strong>${escapeHtml(entry.label)}</strong><span>${escapeHtml(entry.answer)}</span></div>`
@@ -494,15 +502,40 @@
   }
 
   function buildArtifactReadyMarkup(message) {
+    const generatedArtifacts = Array.isArray(message.generatedArtifacts) ? message.generatedArtifacts : [];
+    const nextActions = Array.isArray(message.nextActions) && message.nextActions.length > 0
+      ? message.nextActions
+      : [
+          'Review the finished package to confirm it matches what you wanted.',
+          'If the result is off, start another round and refine the direction.',
+          'If the result is right, use it as the handoff for the next implementation step.'
+        ];
+
     return (
       `<div class="structured-host">` +
         `<div class="summary-card-shell">` +
-          `<div class="label">Result Ready</div>` +
+          `<div class="label">Workflow Complete</div>` +
           `<h2>${escapeHtml(message.title)}</h2>` +
           `<p class="subtitle">${escapeHtml(message.text)}</p>` +
+          `<div class="completion-note">` +
+            `<strong>This brainstorming round is complete.</strong>` +
+            `<span>You have reached the end of the current workflow. The finished package is shown directly in the result panel, so you do not need to open the file path manually.</span>` +
+          `</div>` +
+          (message.artifactPreviewText
+            ? `<div class="summary-text">${escapeHtml(message.artifactPreviewText)}</div>`
+            : '') +
           `<div class="history-list">` +
             `<div class="history-item"><strong>Format</strong><span>${escapeHtml(message.artifactType)}</span></div>` +
-            `<div class="history-item"><strong>Location</strong><span>${escapeHtml(message.path)}</span></div>` +
+            `<div class="history-item"><strong>Result panel</strong><span>The full bundle, design spec, and implementation plan are shown in the page.</span></div>` +
+            generatedArtifacts.map((artifact) => (
+              `<div class="history-item"><strong>${escapeHtml(artifact.label || 'Generated artifact')}</strong><span>${escapeHtml(artifact.title || artifact.path || '')}</span></div>`
+            )).join('') +
+          `</div>` +
+          `<div class="label" style="margin-top:1rem;">What you can do next</div>` +
+          `<div class="next-steps">` +
+            nextActions.map((item, index) => (
+              `<div class="step-item"><strong>Next ${index + 1}</strong><span>${escapeHtml(item)}</span></div>`
+            )).join('') +
           `</div>` +
         `</div>` +
       `</div>`

@@ -2,7 +2,7 @@
   "name": "brainstorm-server-tests",
   "version": "1.0.0",
   "scripts": {
-    "test": "node server.test.js && node structured-host.test.js && node structured-runtime.test.js && node web-session-manager.test.js && node web-product.test.js && bash codex-background-guard.test.sh"
+    "test": "node server.test.js && node structured-host.test.js && node structured-runtime.test.js && node codex-runtime-adapter.test.js && node codex-app-server-client.test.js && node codex-app-server-provider.test.js && node codex-exec-runner.test.js && node codex-exec-provider.test.js && node workflow-artifact-engine.test.js && node workflow-policy.test.js && node brainstorm-quality-fixtures.test.js && node web-session-manager.test.js && node research-asset-store.test.js && node research-asset-lifecycle.test.js && node research-asset-api.test.js && node research-asset-governance.test.js && node web-product.test.js && bash codex-background-guard.test.sh"
   },
   "dependencies": {
     "ws": "^8.19.0"
