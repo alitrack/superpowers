@@ -6,3 +6,5 @@
 node_modules/
 inspo
 triage/
+tests/brainstorm-server/docs/superpowers/plans/*.md
+tests/brainstorm-server/docs/superpowers/specs/*.md
