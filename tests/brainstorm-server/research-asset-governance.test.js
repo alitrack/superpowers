@@ -130,6 +130,7 @@ async function runTests() {
   fs.mkdirSync(TEST_DIR, { recursive: true });
   const workspace = seedWorkspaceAndBundle();
   const server = startServer();
+  let reviewRequestId = null;
 
   let passed = 0;
   let failed = 0;
@@ -182,6 +183,7 @@ async function runTests() {
       const body = JSON.parse(res.body);
       assert.strictEqual(body.type, 'publish-approval');
       assert.strictEqual(body.targetId, workspace.id);
+      reviewRequestId = body.id;
     });
 
     await test('lists review requests for a workspace', async () => {
@@ -193,6 +195,59 @@ async function runTests() {
       const body = JSON.parse(res.body);
       assert.ok(Array.isArray(body.items));
       assert(body.items.some((item) => item.targetId === workspace.id));
+    });
+
+    await test('allows owners to resolve review requests and preserve request history', async () => {
+      const res = await request('POST', `/api/review-requests/${reviewRequestId}/resolve`, {
+        resolutionNote: 'Publish gate cleared'
+      }, {
+        'x-role': 'Owner',
+        'x-actor-id': 'owner-1'
+      });
+      assert.strictEqual(res.status, 200);
+      const body = JSON.parse(res.body);
+      assert.strictEqual(body.status, 'resolved');
+      assert.strictEqual(body.resolvedBy, 'owner-1');
+      assert.strictEqual(body.resolutionNote, 'Publish gate cleared');
+      assert.ok(Array.isArray(body.statusHistory));
+      assert.strictEqual(body.statusHistory.length, 2);
+      assert.strictEqual(body.statusHistory[0].status, 'open');
+      assert.strictEqual(body.statusHistory[1].status, 'resolved');
+    });
+
+    await test('blocks auditors from deciding review requests but allows editors to reject a fresh one', async () => {
+      const createdRes = await request('POST', '/api/review-requests', {
+        type: 'evidence-review',
+        targetType: 'Workspace',
+        targetId: workspace.id,
+        assigneeId: 'editor-1'
+      }, {
+        'x-role': 'Editor',
+        'x-actor-id': 'editor-1'
+      });
+      assert.strictEqual(createdRes.status, 200);
+      const created = JSON.parse(createdRes.body);
+
+      const blockedRes = await request('POST', `/api/review-requests/${created.id}/reject`, {
+        resolutionNote: 'Auditor should not decide'
+      }, {
+        'x-role': 'Auditor',
+        'x-actor-id': 'auditor-1'
+      });
+      assert.strictEqual(blockedRes.status, 403);
+
+      const rejectRes = await request('POST', `/api/review-requests/${created.id}/reject`, {
+        resolutionNote: 'Need more evidence'
+      }, {
+        'x-role': 'Editor',
+        'x-actor-id': 'editor-1'
+      });
+      assert.strictEqual(rejectRes.status, 200);
+      const rejected = JSON.parse(rejectRes.body);
+      assert.strictEqual(rejected.status, 'rejected');
+      assert.strictEqual(rejected.resolvedBy, 'editor-1');
+      assert.strictEqual(rejected.statusHistory.length, 2);
+      assert.strictEqual(rejected.statusHistory[1].status, 'rejected');
     });
 
     await test('requires human confirmation for agent-triggered publish', async () => {

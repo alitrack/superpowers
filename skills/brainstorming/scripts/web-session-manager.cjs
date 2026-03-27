@@ -1810,6 +1810,39 @@ function createSessionManager(options) {
     return entry;
   }
 
+  function linkReviewRequestToWorkspace(workspace, reviewRequestId) {
+    if (!workspace || !reviewRequestId) {
+      return workspace;
+    }
+    const reviewRequests = Array.isArray(workspace.reviewRequests)
+      ? workspace.reviewRequests.slice()
+      : [];
+    if (!reviewRequests.includes(reviewRequestId)) {
+      reviewRequests.push(reviewRequestId);
+    }
+    return researchAssetStore.saveWorkspace({
+      ...workspace,
+      reviewRequests
+    });
+  }
+
+  function resolveWorkspaceForReviewRequest(reviewRequest) {
+    if (!reviewRequest) {
+      return null;
+    }
+    if (reviewRequest.workspaceId) {
+      return researchAssetStore.getWorkspace(reviewRequest.workspaceId);
+    }
+    const bundleId = reviewRequest.bundleId || reviewRequest.targetId;
+    if (bundleId && reviewRequest.targetType === 'ResearchAssetBundle') {
+      const bundle = researchAssetStore.getBundle(bundleId);
+      if (bundle && bundle.workspaceId) {
+        return researchAssetStore.getWorkspace(bundle.workspaceId);
+      }
+    }
+    return null;
+  }
+
   function assertAllowed(role, action) {
     const resolvedRole = String(role || '').trim().toLowerCase();
     const permissions = {
@@ -1819,7 +1852,11 @@ function createSessionManager(options) {
         'audit:view',
         'review-request:create',
         'review-request:view',
+        'review-request:resolve',
+        'review-request:reject',
         'workspace:view',
+        'hypothesis:park',
+        'hypothesis:supersede',
         'evidence_verify',
         'evidence_accept',
         'export',
@@ -1830,7 +1867,11 @@ function createSessionManager(options) {
         'publish',
         'review-request:create',
         'review-request:view',
+        'review-request:resolve',
+        'review-request:reject',
         'workspace:view',
+        'hypothesis:park',
+        'hypothesis:supersede',
         'evidence_verify',
         'evidence_accept',
         'workspace:clone'
@@ -1921,7 +1962,7 @@ function createSessionManager(options) {
         throw error;
       }
     }
-    return researchAssetStore.saveReviewRequest(normalizeReviewRequest({
+    const created = researchAssetStore.saveReviewRequest(normalizeReviewRequest({
       requestType: input && input.type ? input.type : null,
       targetType,
       targetId,
@@ -1930,8 +1971,169 @@ function createSessionManager(options) {
       requestedBy: input && input.requestedBy ? input.requestedBy : null,
       assigneeId: input && input.assigneeId ? input.assigneeId : null,
       status: REVIEW_REQUEST_STATUS.OPEN,
+      statusHistory: [{
+        status: REVIEW_REQUEST_STATUS.OPEN,
+        at: nowIso(),
+        by: input && input.requestedBy ? input.requestedBy : null,
+        note: ''
+      }],
       metadata: input && input.metadata ? input.metadata : {}
     }));
+    const workspace = resolveWorkspaceForReviewRequest(created);
+    if (workspace) {
+      const linkedWorkspace = linkReviewRequestToWorkspace(workspace, created.id);
+      updateSessionResearchWorkspace(linkedWorkspace);
+    }
+    return clone(created);
+  }
+
+  function decideReviewRequest(requestId, status, context) {
+    const existing = researchAssetStore.getReviewRequest(requestId);
+    if (!existing) {
+      throw new Error(`Unknown review request: ${requestId}`);
+    }
+    if (![REVIEW_REQUEST_STATUS.RESOLVED, REVIEW_REQUEST_STATUS.REJECTED].includes(status)) {
+      const error = new Error(`Unsupported review request status: ${status}`);
+      error.code = 'INVALID_REVIEW_REQUEST';
+      throw error;
+    }
+    if (existing.status !== REVIEW_REQUEST_STATUS.OPEN) {
+      const error = new Error('Only open review requests can be updated');
+      error.code = 'INVALID_REVIEW_REQUEST';
+      throw error;
+    }
+
+    const timestamp = nowIso();
+    const resolutionNote = context && typeof context.reason === 'string' ? context.reason : '';
+    const statusHistory = Array.isArray(existing.statusHistory)
+      ? existing.statusHistory.slice()
+      : [];
+    statusHistory.push({
+      status,
+      at: timestamp,
+      by: context && context.actorId ? context.actorId : null,
+      note: resolutionNote
+    });
+
+    const workspace = resolveWorkspaceForReviewRequest(existing);
+    const updated = researchAssetStore.updateReviewRequest(requestId, {
+      status,
+      workspaceId: existing.workspaceId || (workspace && workspace.id) || null,
+      resolvedAt: timestamp,
+      resolvedBy: context && context.actorId ? context.actorId : null,
+      resolutionNote,
+      statusHistory
+    });
+    if (!updated) {
+      throw new Error(`Unknown review request: ${requestId}`);
+    }
+    if (workspace) {
+      const linkedWorkspace = linkReviewRequestToWorkspace(workspace, updated.id);
+      appendWorkspaceAudit(linkedWorkspace, {
+        action: status === REVIEW_REQUEST_STATUS.RESOLVED
+          ? 'review_request_resolved'
+          : 'review_request_rejected',
+        actorId: context && context.actorId ? context.actorId : null,
+        actorRole: context && context.actorRole ? context.actorRole : null,
+        targetType: 'ReviewRequest',
+        targetId: updated.id,
+        before: { status: existing.status },
+        after: { status: updated.status },
+        reason: resolutionNote,
+        details: {
+          requestType: updated.requestType,
+          reviewTargetType: updated.targetType,
+          reviewTargetId: updated.targetId,
+          assigneeId: updated.assigneeId
+        }
+      });
+      updateSessionResearchWorkspace(linkedWorkspace);
+    }
+    return clone(updated);
+  }
+
+  function resolveReviewRequest(requestId, context) {
+    return decideReviewRequest(requestId, REVIEW_REQUEST_STATUS.RESOLVED, context);
+  }
+
+  function rejectReviewRequest(requestId, context) {
+    return decideReviewRequest(requestId, REVIEW_REQUEST_STATUS.REJECTED, context);
+  }
+
+  function transitionHypothesis(workspaceId, hypothesisId, nextStatus, context) {
+    const workspace = getWorkspaceOrThrow(workspaceId);
+    const hypotheses = Array.isArray(workspace.hypotheses) ? workspace.hypotheses : [];
+    const hypothesis = hypotheses.find((item) => item.id === hypothesisId);
+    if (!hypothesis) {
+      throw new Error(`Unknown hypothesis: ${hypothesisId}`);
+    }
+    if (hypothesis.status === nextStatus) {
+      const error = new Error(`Hypothesis is already ${nextStatus}`);
+      error.code = 'INVALID_HYPOTHESIS_TRANSITION';
+      throw error;
+    }
+
+    const timestamp = nowIso();
+    const reason = context && typeof context.reason === 'string' ? context.reason : '';
+    const nextHypotheses = hypotheses.map((item) => {
+      if (item.id !== hypothesisId) {
+        return item;
+      }
+      const updated = {
+        ...item,
+        status: nextStatus,
+        updatedAt: timestamp
+      };
+      if (nextStatus === 'parked') {
+        updated.parkedAt = timestamp;
+        updated.parkedBy = context && context.actorId ? context.actorId : null;
+        updated.parkedReason = reason;
+      } else {
+        updated.supersededAt = timestamp;
+        updated.supersededBy = context && context.actorId ? context.actorId : null;
+        updated.supersededReason = reason;
+        updated.supersededByHypothesisId = context && context.supersededByHypothesisId
+          ? String(context.supersededByHypothesisId)
+          : (item.supersededByHypothesisId || null);
+      }
+      return updated;
+    });
+
+    let updatedWorkspace = researchAssetStore.saveWorkspace({
+      ...workspace,
+      hypotheses: nextHypotheses
+    });
+    updatedWorkspace = appendWorkspaceCheckpoint(
+      updatedWorkspace,
+      'hypothesis_parked_or_superseded',
+      nextStatus === 'parked' ? 'Hypothesis parked' : 'Hypothesis superseded'
+    );
+    appendWorkspaceAudit(updatedWorkspace, {
+      action: nextStatus === 'parked' ? 'hypothesis_parked' : 'hypothesis_superseded',
+      actorId: context && context.actorId ? context.actorId : null,
+      actorRole: context && context.actorRole ? context.actorRole : null,
+      targetType: 'Hypothesis',
+      targetId: hypothesisId,
+      before: { status: hypothesis.status || null },
+      after: { status: nextStatus },
+      reason,
+      details: {
+        title: hypothesis.title || null,
+        supersededByHypothesisId: nextStatus === 'superseded'
+          ? (context && context.supersededByHypothesisId ? String(context.supersededByHypothesisId) : null)
+          : null
+      }
+    });
+    updateSessionResearchWorkspace(updatedWorkspace);
+    return clone(updatedWorkspace.hypotheses.find((item) => item.id === hypothesisId));
+  }
+
+  function parkHypothesis(workspaceId, hypothesisId, context) {
+    return transitionHypothesis(workspaceId, hypothesisId, 'parked', context);
+  }
+
+  function supersedeHypothesis(workspaceId, hypothesisId, context) {
+    return transitionHypothesis(workspaceId, hypothesisId, 'superseded', context);
   }
 
   function cloneResearchAsset(bundleId, input) {
@@ -2211,7 +2413,11 @@ function createSessionManager(options) {
     listAuditEntries,
     listReviewRequests,
     createReviewRequest,
+    resolveReviewRequest,
+    rejectReviewRequest,
     cloneResearchAsset,
+    parkHypothesis,
+    supersedeHypothesis,
     publishWorkspace,
     exportResearchAsset,
     shareResearchAsset,

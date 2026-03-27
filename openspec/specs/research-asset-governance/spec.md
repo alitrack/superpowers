@@ -15,7 +15,7 @@ The system MUST enforce the V1 role model `Owner`, `Editor`, `Viewer`, and `Audi
 - **THEN** the system allows read-only access to audit data without allowing content edits
 
 ### Requirement: The system SHALL support minimal review requests for evidence review and publish approval
-The system SHALL persist a minimal `ReviewRequest` workflow for `evidence-review` and `publish-approval`.
+The system SHALL persist a minimal `ReviewRequest` workflow for `evidence-review` and `publish-approval`, and SHALL allow authorized users to resolve or reject those requests while preserving request history.
 
 #### Scenario: Requesting evidence review
 - **WHEN** an authorized user requests evidence review for an `Evidence` item
@@ -26,8 +26,12 @@ The system SHALL persist a minimal `ReviewRequest` workflow for `evidence-review
 - **THEN** the system creates an `Open` review request linked to that workspace
 
 #### Scenario: Review request is resolved
-- **WHEN** a reviewer finishes processing a request
-- **THEN** the system changes the request status to `Resolved` or `Rejected` and preserves the request history
+- **WHEN** an authorized reviewer resolves a review request
+- **THEN** the system changes the request status to `Resolved`, records who resolved it and when, and preserves the request history
+
+#### Scenario: Review request is rejected
+- **WHEN** an authorized reviewer rejects a review request
+- **THEN** the system changes the request status to `Rejected`, records who rejected it and when, and preserves the request history
 
 ### Requirement: The system MUST record audit entries for governed actions
 The system MUST record audit entries for governed actions including publication, revocation, permission changes, evidence verification or acceptance, critical confidence changes, export, and cross-team sharing.
@@ -50,4 +54,3 @@ The system MUST require a human confirmation step before any agent-triggered hig
 #### Scenario: Agent proposes evidence acceptance
 - **WHEN** an agent attempts to mark evidence as `Verified` or `Accepted`
 - **THEN** the system blocks the direct state transition until an authorized human confirms it
-

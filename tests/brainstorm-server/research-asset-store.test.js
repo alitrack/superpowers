@@ -143,6 +143,44 @@ async function runTests() {
     assert.strictEqual(all[0].id, request.id);
   });
 
+  await test('updates an existing review request while preserving create-time history', async () => {
+    const request = store.saveReviewRequest({
+      workspaceId: 'workspace-1',
+      requestedBy: 'tester',
+      status: REVIEW_REQUEST_STATUS.OPEN,
+      statusHistory: [{
+        status: REVIEW_REQUEST_STATUS.OPEN,
+        at: '2026-03-27T00:00:00.000Z',
+        by: 'tester',
+        note: ''
+      }]
+    });
+
+    const updated = store.updateReviewRequest(request.id, {
+      status: REVIEW_REQUEST_STATUS.RESOLVED,
+      resolvedAt: '2026-03-27T01:00:00.000Z',
+      resolvedBy: 'reviewer-1',
+      resolutionNote: 'Looks good',
+      statusHistory: [
+        ...(request.statusHistory || []),
+        {
+          status: REVIEW_REQUEST_STATUS.RESOLVED,
+          at: '2026-03-27T01:00:00.000Z',
+          by: 'reviewer-1',
+          note: 'Looks good'
+        }
+      ]
+    });
+
+    assert.strictEqual(updated.status, REVIEW_REQUEST_STATUS.RESOLVED);
+    assert.strictEqual(updated.createdAt, request.createdAt);
+    assert.strictEqual(updated.resolvedBy, 'reviewer-1');
+    assert.strictEqual(updated.resolutionNote, 'Looks good');
+    assert.strictEqual(updated.statusHistory.length, 2);
+    assert.strictEqual(updated.statusHistory[0].status, REVIEW_REQUEST_STATUS.OPEN);
+    assert.strictEqual(updated.statusHistory[1].status, REVIEW_REQUEST_STATUS.RESOLVED);
+  });
+
   await test('fingerprints sources deterministically after normalization', async () => {
     const left = fingerprintSource({ url: 'https://example.com/x', kind: 'url', title: 'X' });
     const right = fingerprintSource({ kind: 'url', title: 'X', url: 'https://example.com/x' });
@@ -185,4 +223,3 @@ runTests().catch((error) => {
   cleanup();
   process.exit(1);
 });
-

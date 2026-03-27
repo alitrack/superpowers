@@ -99,6 +99,9 @@ async function runTests() {
       assert(res.body.includes('Research Workspace'));
       assert(res.body.includes('Publish Review'));
       assert(res.body.includes('Review Requests'));
+      assert(res.body.includes('V1 Governance Lens'));
+      assert(res.body.includes('governance-role-select'));
+      assert(res.body.includes('Auditor'));
       assert(/Permissions\s*&amp;\s*Audit/.test(res.body));
       assert(res.body.includes('asset-library-list'));
       assert(res.body.includes('project-library-list'));

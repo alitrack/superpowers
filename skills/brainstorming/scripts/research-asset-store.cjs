@@ -169,6 +169,20 @@ function createResearchAssetStore(options) {
       .sort((left, right) => String(left.createdAt).localeCompare(String(right.createdAt)));
   }
 
+  function updateReviewRequest(requestId, nextFields) {
+    const existing = getReviewRequest(requestId);
+    if (!existing) {
+      return null;
+    }
+    const normalized = normalizeReviewRequest({
+      ...existing,
+      ...(nextFields || {}),
+      id: existing.id
+    }, { existing });
+    writeJson(path.join(reviewRequestsDir, `${normalized.id}.json`), normalized);
+    return normalized;
+  }
+
   function auditLogPath(workspaceId) {
     return path.join(auditDir, `${workspaceId}.ndjson`);
   }
@@ -218,6 +232,7 @@ function createResearchAssetStore(options) {
     saveReviewRequest,
     getReviewRequest,
     listReviewRequests,
+    updateReviewRequest,
     appendAuditEntry,
     listAuditEntries
   };

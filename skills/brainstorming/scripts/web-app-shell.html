@@ -340,6 +340,90 @@
       font-size: 0.92rem;
     }
 
+    .role-switcher {
+      margin-top: 1rem;
+      padding: 1rem;
+      border-radius: 24px;
+      border: 1px solid var(--border);
+      background:
+        linear-gradient(135deg, rgba(255, 244, 235, 0.88), rgba(255, 255, 255, 0.82));
+      display: grid;
+      gap: 0.85rem;
+    }
+
+    .role-switcher-head {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 1rem;
+      align-items: start;
+    }
+
+    .role-switcher strong {
+      display: block;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--accent-deep);
+      margin-bottom: 0.35rem;
+    }
+
+    .role-switcher p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+      max-width: 68ch;
+      font-size: 0.94rem;
+    }
+
+    .role-switcher-control {
+      display: grid;
+      gap: 0.4rem;
+      min-width: 220px;
+    }
+
+    .role-switcher-control label {
+      font-size: 0.74rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--accent-deep);
+    }
+
+    .role-switcher-control select {
+      appearance: none;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.92);
+      color: var(--text);
+      font: inherit;
+      padding: 0.8rem 0.95rem;
+      box-shadow: 0 10px 24px rgba(86, 52, 33, 0.06);
+    }
+
+    .role-switcher-control select:focus {
+      outline: 2px solid rgba(182, 84, 45, 0.16);
+      border-color: rgba(182, 84, 45, 0.42);
+    }
+
+    .role-switcher-note {
+      border-radius: 16px;
+      border: 1px solid rgba(182, 84, 45, 0.12);
+      background: rgba(255, 255, 255, 0.68);
+      padding: 0.85rem 0.9rem;
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 0.9rem;
+    }
+
+    .role-switcher-note strong {
+      display: inline;
+      font-size: inherit;
+      text-transform: none;
+      letter-spacing: normal;
+      color: var(--text);
+      margin: 0;
+    }
+
     .layout {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 340px;
@@ -746,6 +830,24 @@
             一次只处理一个正式问题，让思路慢慢收敛，而不是一下堆满整页选择。
           </div>
         </div>
+        <div class="role-switcher">
+          <div class="role-switcher-head">
+            <div>
+              <strong>V1 Governance Lens</strong>
+              <p>这里只切换当前浏览器的治理视角，用来验证 `Owner / Editor / Viewer / Auditor` 在产品层的边界，不代表真实登录或生产级鉴权。</p>
+            </div>
+            <div class="role-switcher-control">
+              <label for="governance-role-select">Active Role</label>
+              <select id="governance-role-select">
+                <option value="Owner">Owner</option>
+                <option value="Editor">Editor</option>
+                <option value="Viewer">Viewer</option>
+                <option value="Auditor">Auditor</option>
+              </select>
+            </div>
+          </div>
+          <div id="governance-role-note" class="role-switcher-note"></div>
+        </div>
         <div class="persistent-composer">
           <div>
             <strong>Start A New Brainstorm</strong>
@@ -830,9 +932,41 @@
       const bundlePreviewStatusEl = document.getElementById('bundle-preview-status');
       const persistentSeedInputEl = document.getElementById('persistent-seed-input');
       const persistentSeedErrorEl = document.getElementById('persistent-seed-error');
+      const governanceRoleSelectEl = document.getElementById('governance-role-select');
+      const governanceRoleNoteEl = document.getElementById('governance-role-note');
+      const governanceRoleMap = {
+        Owner: {
+          actorId: 'browser-owner',
+          canViewAudit: true,
+          canViewReviewRequests: true,
+          headline: 'Full governance control in V1.',
+          detail: 'You can inspect publish review, review requests, audit trail, and the writable flows that owner role permits.'
+        },
+        Editor: {
+          actorId: 'browser-editor',
+          canViewAudit: false,
+          canViewReviewRequests: true,
+          headline: 'Execution-focused governance view.',
+          detail: 'Editors can inspect publish readiness and review requests, but audit visibility stays outside this role.'
+        },
+        Viewer: {
+          actorId: 'browser-viewer',
+          canViewAudit: false,
+          canViewReviewRequests: false,
+          headline: 'Read-only research view.',
+          detail: 'Research assets and workspace summaries stay readable, while governance decision panels stay read-only or hidden.'
+        },
+        Auditor: {
+          actorId: 'browser-auditor',
+          canViewAudit: true,
+          canViewReviewRequests: true,
+          headline: 'Audit-first read-only view.',
+          detail: 'Auditors keep audit entries, review requests, publish review, and bundle preview visible without surfacing edit actions.'
+        }
+      };
       const governanceHeaders = {
         'x-role': 'Owner',
-        'x-actor-id': 'browser-user'
+        'x-actor-id': 'browser-owner'
       };
       window.currentWorkspaceId = null;
       window.currentAssetId = null;
@@ -850,6 +984,17 @@
 
       function readPersistentSeed() {
         return persistentSeedInputEl.value.trim();
+      }
+
+      function getActiveGovernanceRole() {
+        const role = governanceRoleSelectEl && governanceRoleSelectEl.value
+          ? governanceRoleSelectEl.value
+          : 'Owner';
+        return governanceRoleMap[role] ? role : 'Owner';
+      }
+
+      function getActiveGovernanceConfig() {
+        return governanceRoleMap[getActiveGovernanceRole()] || governanceRoleMap.Owner;
       }
 
       async function api(method, url, body) {
@@ -876,6 +1021,27 @@
           .replace(/>/g, '&gt;')
           .replace(/"/g, '&quot;')
           .replace(/'/g, '&#39;');
+      }
+
+      function applyGovernanceRole(role, options) {
+        const nextRole = governanceRoleMap[role] ? role : 'Owner';
+        const config = governanceRoleMap[nextRole];
+        governanceHeaders['x-role'] = nextRole;
+        governanceHeaders['x-actor-id'] = config.actorId;
+        if (governanceRoleSelectEl) {
+          governanceRoleSelectEl.value = nextRole;
+        }
+        if (governanceRoleNoteEl) {
+          governanceRoleNoteEl.innerHTML =
+            `<span class="inline-kicker">${escapeHtml(nextRole)}</span> ` +
+            `<strong>${escapeHtml(config.headline)}</strong><br>` +
+            `${escapeHtml(config.detail)}`;
+        }
+        if (!(options && options.skipRefresh)) {
+          refreshWorkbenchPanels(window.currentWorkspaceId).catch(() => {
+            // Panel-level fallback messaging handles role-restricted sections.
+          });
+        }
       }
 
       function getChecklistProgress(workflow) {
@@ -1081,6 +1247,12 @@
       }
 
       function renderAuditFeed(items) {
+        const role = getActiveGovernanceRole();
+        const config = getActiveGovernanceConfig();
+        if (!config.canViewAudit) {
+          auditFeedEl.innerHTML = `<div class="mini-panel-item">${escapeHtml(role)} role does not include audit visibility in this V1 workbench view.</div>`;
+          return;
+        }
         if (!items.length) {
           auditFeedEl.innerHTML = '<div class="mini-panel-item">Audit trail appears here for governed actions.</div>';
           return;
@@ -1096,6 +1268,12 @@
       }
 
       function renderReviewRequests(items) {
+        const role = getActiveGovernanceRole();
+        const config = getActiveGovernanceConfig();
+        if (!config.canViewReviewRequests) {
+          reviewRequestQueueEl.innerHTML = `<div class="mini-panel-item">${escapeHtml(role)} role keeps the review queue hidden in this V1 browser view.</div>`;
+          return;
+        }
         if (!items.length) {
           reviewRequestQueueEl.innerHTML = '<div class="mini-panel-item">No review requests yet.</div>';
           return;
@@ -1179,6 +1357,7 @@
 
       async function refreshWorkspaces(preferredWorkspaceId) {
         try {
+          const config = getActiveGovernanceConfig();
           const payload = await api('GET', '/api/workspaces');
           const items = Array.isArray(payload.items) ? payload.items : [];
           if (!items.length) {
@@ -1210,8 +1389,12 @@
 
           const [publishReview, reviewRequests, auditEntries] = await Promise.all([
             api('GET', `/api/workspaces/${nextWorkspaceId}/publish-review`),
-            api('GET', `/api/review-requests?workspaceId=${encodeURIComponent(nextWorkspaceId)}`),
-            api('GET', `/api/audit?workspaceId=${encodeURIComponent(nextWorkspaceId)}`)
+            config.canViewReviewRequests
+              ? api('GET', `/api/review-requests?workspaceId=${encodeURIComponent(nextWorkspaceId)}`)
+              : Promise.resolve({ items: [] }),
+            config.canViewAudit
+              ? api('GET', `/api/audit?workspaceId=${encodeURIComponent(nextWorkspaceId)}`)
+              : Promise.resolve({ items: [] })
           ]);
           renderPublishReview(publishReview);
           renderReviewRequests(Array.isArray(reviewRequests.items) ? reviewRequests.items : []);
@@ -1329,6 +1512,12 @@
       });
       document.getElementById('persistent-start-artifact').addEventListener('click', () => startFromPersistentComposer('artifact'));
       document.getElementById('persistent-start-summary').addEventListener('click', () => startFromPersistentComposer('summary'));
+      applyGovernanceRole('Owner', { skipRefresh: true });
+      if (governanceRoleSelectEl) {
+        governanceRoleSelectEl.addEventListener('change', () => {
+          applyGovernanceRole(governanceRoleSelectEl.value);
+        });
+      }
 
       refreshSessionList()
         .then((sessions) => {

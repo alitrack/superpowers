@@ -228,6 +228,56 @@ async function runTests() {
     assert(ready.workspace.checkpoints.some((item) => item.triggerType === 'workspace_ready_for_publish'));
   });
 
+  await test('parks and supersedes hypotheses while keeping branches in workspace history with checkpoints', async (tmpDir) => {
+    const manager = createSessionManager({ dataDir: tmpDir, runtimeAdapter: { async createSession() { return {}; } } });
+    const store = createResearchAssetStore({ dataDir: tmpDir });
+    const workspace = store.saveWorkspace({
+      id: 'workspace-branches',
+      title: 'Branch history',
+      team: 'strategy',
+      owner: 'u1',
+      status: 'active',
+      rootQuestionId: 'rq-1',
+      researchQuestion: { id: 'rq-1', title: 'Question' },
+      hypotheses: [
+        { id: 'h-1', status: 'active', title: 'Slow enterprise path' },
+        { id: 'h-2', status: 'active', title: 'Mid-market path' }
+      ],
+      evidence: [],
+      judgments: [],
+      conclusion: null
+    });
+
+    const parked = manager.parkHypothesis(workspace.id, 'h-1', {
+      actorId: 'editor-1',
+      actorRole: 'Editor',
+      reason: 'Wait for stronger signal'
+    });
+    assert.strictEqual(parked.status, 'parked');
+    assert.strictEqual(parked.parkedReason, 'Wait for stronger signal');
+
+    const superseded = manager.supersedeHypothesis(workspace.id, 'h-2', {
+      actorId: 'owner-1',
+      actorRole: 'Owner',
+      reason: 'Replaced by clearer demand thesis',
+      supersededByHypothesisId: 'h-3'
+    });
+    assert.strictEqual(superseded.status, 'superseded');
+    assert.strictEqual(superseded.supersededByHypothesisId, 'h-3');
+
+    const refreshed = manager.getResearchWorkspace(workspace.id);
+    assert(refreshed.hypotheses.some((item) => item.id === 'h-1' && item.status === 'parked'));
+    assert(refreshed.hypotheses.some((item) => item.id === 'h-2' && item.status === 'superseded'));
+    assert.strictEqual(
+      refreshed.checkpoints.filter((item) => item.triggerType === 'hypothesis_parked_or_superseded').length,
+      2
+    );
+
+    const auditEntries = store.listAuditEntries(workspace.id);
+    assert(auditEntries.some((item) => item.action === 'hypothesis_parked' && item.targetId === 'h-1'));
+    assert(auditEntries.some((item) => item.action === 'hypothesis_superseded' && item.targetId === 'h-2'));
+  });
+
   console.log(`\n--- Results: ${passed} passed, ${failed} failed ---`);
   if (failed > 0) process.exit(1);
 }

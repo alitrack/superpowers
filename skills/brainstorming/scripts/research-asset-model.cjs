@@ -223,6 +223,18 @@ function normalizeReviewRequest(request, options) {
   const status = Object.values(REVIEW_REQUEST_STATUS).includes(input.status)
     ? input.status
     : (existing && existing.status) || REVIEW_REQUEST_STATUS.OPEN;
+  const requestedBy = typeof input.requestedBy === 'string'
+    ? input.requestedBy
+    : (existing && existing.requestedBy) || null;
+  const fallbackHistory = [{
+    status: REVIEW_REQUEST_STATUS.OPEN,
+    at: createdAt,
+    by: requestedBy,
+    note: ''
+  }];
+  const statusHistory = Array.isArray(input.statusHistory)
+    ? input.statusHistory
+    : (existing && Array.isArray(existing.statusHistory) ? existing.statusHistory : fallbackHistory);
 
   return {
     entityType: 'review_request',
@@ -245,11 +257,24 @@ function normalizeReviewRequest(request, options) {
       ? input.assigneeId
       : (existing && existing.assigneeId) || null,
     status,
-    requestedBy: typeof input.requestedBy === 'string'
-      ? input.requestedBy
-      : (existing && existing.requestedBy) || null,
+    requestedBy,
+    resolvedAt: input.resolvedAt || (existing && existing.resolvedAt) || null,
+    resolvedBy: typeof input.resolvedBy === 'string'
+      ? input.resolvedBy
+      : (existing && existing.resolvedBy) || null,
+    resolutionNote: typeof input.resolutionNote === 'string'
+      ? input.resolutionNote
+      : (existing && existing.resolutionNote) || '',
     createdAt,
     updatedAt: nowIso(),
+    statusHistory: statusHistory.map((entry) => ({
+      status: Object.values(REVIEW_REQUEST_STATUS).includes(entry && entry.status)
+        ? entry.status
+        : status,
+      at: entry && entry.at ? entry.at : createdAt,
+      by: entry && typeof entry.by === 'string' ? entry.by : null,
+      note: entry && typeof entry.note === 'string' ? entry.note : ''
+    })),
     metadata: isPlainObject(input.metadata)
       ? input.metadata
       : (existing && isPlainObject(existing.metadata) ? existing.metadata : {})

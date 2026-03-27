@@ -200,6 +200,7 @@ function getErrorStatus(error, fallbackStatus) {
     || error.code === 'INVALID_SHARE_REQUEST'
     || error.code === 'PUBLISH_VALIDATION_FAILED'
     || error.code === 'INVALID_JUDGMENT_PROMOTION'
+    || error.code === 'INVALID_HYPOTHESIS_TRANSITION'
   ) {
     return 400;
   }
@@ -367,6 +368,54 @@ function handleApiRequest(req, res, pathname, requestUrl) {
     return;
   }
 
+  const resolveReviewRequestMatch = pathname.match(/^\/api\/review-requests\/([^/]+)\/resolve$/);
+  if (req.method === 'POST' && resolveReviewRequestMatch) {
+    parseJsonBody(req, (error, body) => {
+      if (error) {
+        sendJson(res, 400, { error: 'Invalid JSON body' });
+        return;
+      }
+      try {
+        webSessionManager.assertAllowed(getRole(req), 'review-request:resolve');
+        const reviewRequest = webSessionManager.resolveReviewRequest(resolveReviewRequestMatch[1], {
+          actorId: getActorId(req),
+          actorRole: getRole(req),
+          reason: typeof body.resolutionNote === 'string'
+            ? body.resolutionNote
+            : (typeof body.reason === 'string' ? body.reason : '')
+        });
+        sendJson(res, 200, reviewRequest);
+      } catch (requestError) {
+        sendJson(res, getErrorStatus(requestError, 404), { error: requestError.message });
+      }
+    });
+    return;
+  }
+
+  const rejectReviewRequestMatch = pathname.match(/^\/api\/review-requests\/([^/]+)\/reject$/);
+  if (req.method === 'POST' && rejectReviewRequestMatch) {
+    parseJsonBody(req, (error, body) => {
+      if (error) {
+        sendJson(res, 400, { error: 'Invalid JSON body' });
+        return;
+      }
+      try {
+        webSessionManager.assertAllowed(getRole(req), 'review-request:reject');
+        const reviewRequest = webSessionManager.rejectReviewRequest(rejectReviewRequestMatch[1], {
+          actorId: getActorId(req),
+          actorRole: getRole(req),
+          reason: typeof body.resolutionNote === 'string'
+            ? body.resolutionNote
+            : (typeof body.reason === 'string' ? body.reason : '')
+        });
+        sendJson(res, 200, reviewRequest);
+      } catch (requestError) {
+        sendJson(res, getErrorStatus(requestError, 404), { error: requestError.message });
+      }
+    });
+    return;
+  }
+
   const workspaceMatch = pathname.match(/^\/api\/workspaces\/([^/]+)$/);
   if (req.method === 'GET' && workspaceMatch) {
     try {
@@ -409,6 +458,53 @@ function handleApiRequest(req, res, pathname, requestUrl) {
           error: readyError.message,
           validation: readyError.validation || null
         });
+      }
+    });
+    return;
+  }
+
+  const parkHypothesisMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/hypotheses\/([^/]+)\/park$/);
+  if (req.method === 'POST' && parkHypothesisMatch) {
+    parseJsonBody(req, (error, body) => {
+      if (error) {
+        sendJson(res, 400, { error: 'Invalid JSON body' });
+        return;
+      }
+      try {
+        webSessionManager.assertAllowed(getRole(req), 'hypothesis:park');
+        const hypothesis = webSessionManager.parkHypothesis(parkHypothesisMatch[1], parkHypothesisMatch[2], {
+          actorId: getActorId(req),
+          actorRole: getRole(req),
+          reason: typeof body.reason === 'string' ? body.reason : ''
+        });
+        sendJson(res, 200, { hypothesis });
+      } catch (transitionError) {
+        sendJson(res, getErrorStatus(transitionError, 404), { error: transitionError.message });
+      }
+    });
+    return;
+  }
+
+  const supersedeHypothesisMatch = pathname.match(/^\/api\/workspaces\/([^/]+)\/hypotheses\/([^/]+)\/supersede$/);
+  if (req.method === 'POST' && supersedeHypothesisMatch) {
+    parseJsonBody(req, (error, body) => {
+      if (error) {
+        sendJson(res, 400, { error: 'Invalid JSON body' });
+        return;
+      }
+      try {
+        webSessionManager.assertAllowed(getRole(req), 'hypothesis:supersede');
+        const hypothesis = webSessionManager.supersedeHypothesis(supersedeHypothesisMatch[1], supersedeHypothesisMatch[2], {
+          actorId: getActorId(req),
+          actorRole: getRole(req),
+          reason: typeof body.reason === 'string' ? body.reason : '',
+          supersededByHypothesisId: typeof body.supersededByHypothesisId === 'string'
+            ? body.supersededByHypothesisId
+            : null
+        });
+        sendJson(res, 200, { hypothesis });
+      } catch (transitionError) {
+        sendJson(res, getErrorStatus(transitionError, 404), { error: transitionError.message });
       }
     });
     return;
