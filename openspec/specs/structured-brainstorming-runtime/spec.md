@@ -16,19 +16,15 @@ The system MUST persist provider-backed runtime state so a structured brainstorm
 - **THEN** the runtime restores the saved state before accepting another browser-submitted `answer`
 
 ### Requirement: Structured brainstorming runtime owns active-question sequencing
-The system MUST run structured brainstorming question sequencing in a backend-side runtime so hosts do not decide what question comes next, and that runtime MUST initialize from the session seed when one is available rather than always starting with a generic intake question.
+The system MUST run structured brainstorming question sequencing in a backend-side runtime so hosts do not decide what question comes next, and Codex-backed sessions MUST derive that questioning strategy from the current brainstorming skill guidance plus the session seed.
 
-#### Scenario: Seeded session starts
-- **WHEN** a structured brainstorming session is initialized with an initial user prompt
-- **THEN** the backend runtime emits the first formal `question`, `summary`, or `artifact_ready` message based on that seed instead of asking again what the user wants to brainstorm about
-
-#### Scenario: Unseeded compatibility session starts
-- **WHEN** a structured brainstorming session is initialized without an initial user prompt
-- **THEN** the backend runtime may use the compatibility intake path to identify the topic before continuing
+#### Scenario: Seeded Codex-backed session starts
+- **WHEN** a structured brainstorming session is initialized with an initial user prompt on a Codex-backed runtime
+- **THEN** the backend runtime emits the first formal `question`, `summary`, or `artifact_ready` message based on both the seed and current brainstorming skill guidance
 
 #### Scenario: Normalized answer is received
 - **WHEN** the host submits a normalized `answer` message
-- **THEN** the backend runtime updates only that session and decides whether to emit the next `question`, a `summary`, or an `artifact_ready` message
+- **THEN** the backend runtime updates the session's facilitation state and decides whether to emit the next `question`, a `summary`, or an `artifact_ready` message using the skill-backed policy
 
 ### Requirement: Browser structured host behaves as a renderer-only client
 The browser structured brainstorming host MUST render backend-provided messages and submit normalized answers without embedding its own branching tree, while owning only the pre-session seed capture needed to start the runtime with the correct topic.
@@ -46,12 +42,12 @@ The browser structured brainstorming host MUST render backend-provided messages 
 - **THEN** it does not also invent a separate local first question for the runtime to answer
 
 ### Requirement: Local demo runtime remains contract-compatible
-The in-repo brainstorm server MUST exercise the same transport contract used by future structured brainstorming hosts even as the session-start protocol becomes seed-aware.
+The in-repo brainstorm server MUST exercise the same transport contract used by future structured brainstorming hosts even when the real Codex-backed path is skill-backed.
 
-#### Scenario: Seeded demo flow advances
-- **WHEN** the local runtime processes a seeded browser-created session
-- **THEN** the first outbound message still conforms to the existing `question`, `summary`, or `artifact_ready` transport contract
-
-#### Scenario: Provider-backed runtime advances
+#### Scenario: Real Codex-backed runtime advances
 - **WHEN** the real Codex-backed runtime processes a seeded browser-created session
-- **THEN** the first outbound message also conforms to the same `question`, `summary`, or `artifact_ready` transport contract
+- **THEN** the next outbound message conforms to the existing `question`, `summary`, or `artifact_ready` transport contract
+
+#### Scenario: Fake fallback runtime advances
+- **WHEN** the local fake runtime processes the same contract flow for tests
+- **THEN** it remains contract-compatible without claiming to be the full skill-backed production path
