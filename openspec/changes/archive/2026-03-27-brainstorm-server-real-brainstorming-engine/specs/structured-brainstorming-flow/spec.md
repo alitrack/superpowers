@@ -1,8 +1,5 @@
-# structured-brainstorming-flow Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change structured-brainstorming. Update Purpose after archive.
-## Requirements
 ### Requirement: Hosts present one active answerable question at a time
 The system MUST expose exactly one active answerable structured brainstorming question at a time so the user can focus on the current decision without scanning unrelated prompts, even while the backend is carrying a richer multi-phase brainstorming process internally.
 
@@ -13,10 +10,6 @@ The system MUST expose exactly one active answerable structured brainstorming qu
 #### Scenario: Prior answers exist
 - **WHEN** the user has already answered earlier questions
 - **THEN** the host may show them as read-only history while keeping only one active question available for input
-
-#### Scenario: Session is reopened
-- **WHEN** the browser reloads a persisted brainstorming session that is still waiting for user input
-- **THEN** the host restores the same single active question rather than restarting the flow from the beginning
 
 ### Requirement: Backend controls question sequencing and branching
 The system SHALL let the backend decide which question comes next so branching logic stays consistent across hosts and is driven by brainstorming phase, learning goals, and candidate directions rather than by hardcoded intake-field order.

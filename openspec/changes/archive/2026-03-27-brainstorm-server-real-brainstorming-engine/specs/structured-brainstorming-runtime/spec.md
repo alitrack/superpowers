@@ -1,19 +1,4 @@
-# structured-brainstorming-runtime Specification
-
-## Purpose
-Define the backend-side runtime behavior that owns structured brainstorming session state and question sequencing while keeping hosts renderer-only.
-
-## Requirements
-### Requirement: Provider-backed runtime persists resumable session continuity
-The system MUST persist provider-backed runtime state so a structured brainstorming session can continue after reload without losing the current active message.
-
-#### Scenario: Runtime state is saved after a turn
-- **WHEN** a provider-backed structured brainstorming session emits a new `question`, `summary`, or `artifact_ready`
-- **THEN** the system persists the current active message, normalized history, and provider session metadata needed to continue later
-
-#### Scenario: Runtime state is restored before the next turn
-- **WHEN** a persisted structured brainstorming session is resumed
-- **THEN** the runtime restores the saved state before accepting another browser-submitted `answer`
+## MODIFIED Requirements
 
 ### Requirement: Structured brainstorming runtime owns active-question sequencing
 The system MUST run structured brainstorming question sequencing in a backend-side runtime so hosts do not decide what question comes next, and that runtime MUST maintain enough strategy state to behave like a brainstorming facilitator rather than a generic structured questionnaire.
@@ -24,7 +9,7 @@ The system MUST run structured brainstorming question sequencing in a backend-si
 
 #### Scenario: Normalized answer is received
 - **WHEN** the host submits a normalized `answer` message
-- **THEN** the backend runtime updates only that session and decides whether to emit the next `question`, a `summary`, or an `artifact_ready` message
+- **THEN** the backend runtime updates the session's facilitation state and decides whether to emit the next `question`, a `summary`, or an `artifact_ready` message
 
 ### Requirement: Browser structured host behaves as a renderer-only client
 The browser structured brainstorming host MUST render backend-provided messages and submit normalized answers without embedding its own branching tree, regardless of whether the backend is scoping the problem, reframing it, generating alternatives, or converging on a path.
