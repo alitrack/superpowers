@@ -1,8 +1,5 @@
-# structured-brainstorming-flow Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change structured-brainstorming. Update Purpose after archive.
-## Requirements
 ### Requirement: Hosts present one active answerable question at a time
 The system MUST expose exactly one active answerable user decision at a time while still allowing the host to show read-only workflow progress, prior answers, and reviewable draft artifacts around that decision.
 
@@ -30,7 +27,7 @@ The system MUST treat the host as a renderer, approval surface, and artifact vie
 
 #### Scenario: User submits an answer
 - **WHEN** an answer is accepted by the host
-- **THEN** the host waits for the next backend message instead of deciding the next question locally
+- **THEN** the host waits for the next backend message or workflow-state update instead of deciding the next step locally
 
 #### Scenario: Hidden workflow step is running
 - **WHEN** the backend enters an internal automation step such as draft writing or review
@@ -46,6 +43,8 @@ The system MUST conclude V1 with a structured completion state that exposes a re
 #### Scenario: Workflow blocks before completion
 - **WHEN** the backend cannot complete the internal workflow automatically
 - **THEN** the host presents the current reviewable state together with one active request for user guidance
+
+## ADDED Requirements
 
 ### Requirement: Hosts present workflow progress in non-technical language
 The system MUST present workflow stages to default users without requiring them to understand git, skills, subagents, or internal reviewer terminology.

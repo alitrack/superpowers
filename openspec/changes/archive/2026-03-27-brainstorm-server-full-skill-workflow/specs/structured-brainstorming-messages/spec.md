@@ -1,8 +1,5 @@
-# structured-brainstorming-messages Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change structured-brainstorming. Update Purpose after archive.
-## Requirements
 ### Requirement: Structured brainstorming messages use a shared transport contract
 The system MUST represent structured brainstorming interactions through a shared transport contract so browser, terminal, and GUI hosts can exchange the same message shapes for questions, answers, summaries, artifact completion, and workflow-related review states.
 
@@ -46,6 +43,8 @@ The system MUST include enough structured information in completion messages for
 #### Scenario: Artifact readiness is emitted
 - **WHEN** the backend has produced the final V1 artifacts
 - **THEN** the `artifact_ready` payload includes enough linked state for the host to load the final design spec and implementation plan bundle
+
+## ADDED Requirements
 
 ### Requirement: User-facing prompts avoid engineering workflow jargon by default
 The system MUST phrase default user-facing prompts and stage labels without requiring knowledge of git, subagents, skills, or internal workflow names.

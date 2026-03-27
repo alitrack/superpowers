@@ -1,19 +1,4 @@
-# structured-brainstorming-runtime Specification
-
-## Purpose
-Define the backend-side runtime behavior that owns structured brainstorming session state and question sequencing while keeping hosts renderer-only.
-
-## Requirements
-### Requirement: Provider-backed runtime persists resumable session continuity
-The system MUST persist provider-backed runtime state so a structured brainstorming session can continue after reload without losing the current active message.
-
-#### Scenario: Runtime state is saved after a turn
-- **WHEN** a provider-backed structured brainstorming session emits a new `question`, `summary`, or `artifact_ready`
-- **THEN** the system persists the current active message, normalized history, and provider session metadata needed to continue later
-
-#### Scenario: Runtime state is restored before the next turn
-- **WHEN** a persisted structured brainstorming session is resumed
-- **THEN** the runtime restores the saved state before accepting another browser-submitted `answer`
+## MODIFIED Requirements
 
 ### Requirement: Structured brainstorming runtime owns active-question sequencing
 The system MUST run structured brainstorming in a backend-side workflow runtime that owns both active user decisions and hidden internal automation through plan completion.
