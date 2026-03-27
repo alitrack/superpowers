@@ -37,13 +37,12 @@ The system MUST normalize user input into a standard `answer` message so downstr
 - **THEN** the emitted `answer` message preserves the free text and marks it with the correct text-capable `answerMode`
 
 ### Requirement: Completion messages preserve the converged path
-The system MUST include enough structured information in completion messages for a host or backend to reconstruct the selected path without re-parsing raw user text.
+The system MUST include enough structured information in completion messages for a host or backend to reconstruct the selected path, the explored alternatives, and the finished brainstorming deliverable without re-parsing raw user text.
 
 #### Scenario: Summary is emitted
 - **WHEN** the backend emits a `summary`
-- **THEN** the payload includes the converged path and the normalized answers for each completed question
+- **THEN** the payload includes the mature brainstorming deliverable content together with the normalized answers for the completed session
 
 #### Scenario: Artifact readiness is emitted
 - **WHEN** the backend has produced a concrete output file
-- **THEN** the `artifact_ready` payload includes the artifact type, title, location, and a short user-facing description
-
+- **THEN** the `artifact_ready` payload includes the artifact type, title, location, a short user-facing description, and enough linked state for the host to load the mature brainstorming deliverable

@@ -16,19 +16,19 @@ The system MUST persist provider-backed runtime state so a structured brainstorm
 - **THEN** the runtime restores the saved state before accepting another browser-submitted `answer`
 
 ### Requirement: Structured brainstorming runtime owns active-question sequencing
-The system MUST run structured brainstorming question sequencing in a backend-side runtime so hosts do not decide what question comes next, and the real Codex-backed path MUST bootstrap that sequencing from the required repository skills before the first user-facing response.
+The system MUST run structured brainstorming question sequencing in a backend-side runtime so hosts do not decide what question comes next, and the real Codex-backed path MUST continue the session until the finished-deliverable completion gate is satisfied rather than stopping at the first lightweight handoff.
 
-#### Scenario: Real seeded session starts
-- **WHEN** a real Codex-backed structured brainstorming session is initialized with a user seed
-- **THEN** the runtime first loads the required repository skills and only then emits the first `question`, `summary`, or `artifact_ready` message
-
-#### Scenario: Skill bootstrap requires repo access
-- **WHEN** the real runtime needs to load the required repository skills
-- **THEN** its base instructions allow reading those specific repository files without opening unrelated repo inspection by default
+#### Scenario: Session starts from a user seed
+- **WHEN** a structured brainstorming session is initialized from a user-provided seed
+- **THEN** the backend runtime owns both question sequencing and finished-deliverable completion logic
 
 #### Scenario: Normalized answer is received
 - **WHEN** the host submits a normalized `answer` message
-- **THEN** the backend runtime continues deciding whether to emit the next `question`, a `summary`, or an `artifact_ready` message while staying grounded in the loaded skills and existing browser contract
+- **THEN** the backend runtime decides whether to emit another `question`, continue internal synthesis, or produce a completed deliverable only after the completion gate is satisfied
+
+#### Scenario: Handoff phase is reached before the deliverable is mature
+- **WHEN** the runtime has enough state to enter handoff but the finished deliverable is still incomplete
+- **THEN** it does not emit final completion and instead continues the session toward a mature deliverable
 
 ### Requirement: Browser structured host behaves as a renderer-only client
 The browser structured brainstorming host MUST render backend-provided messages and submit normalized answers without embedding its own branching tree, while owning only the pre-session seed capture needed to start the runtime with the correct topic.
