@@ -9,6 +9,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+source "$SCRIPT_DIR/common.sh"
 
 TIMESTAMP=$(date +%s)
 OUTPUT_DIR="/tmp/superpowers-tests/${TIMESTAMP}/explicit-skill-requests/multiturn"
@@ -46,12 +47,25 @@ EOF
 # Turn 1: Start a planning conversation
 echo ">>> Turn 1: Starting planning conversation..."
 TURN1_LOG="$OUTPUT_DIR/turn1.json"
-claude -p "I need to implement an authentication system. Let's plan this out. The requirements are: user registration with email/password, JWT tokens, and protected routes." \
+set +e
+run_claude_capture "$TURN1_LOG" \
+    -p "I need to implement an authentication system. Let's plan this out. The requirements are: user registration with email/password, JWT tokens, and protected routes." \
     --plugin-dir "$PLUGIN_DIR" \
     --dangerously-skip-permissions \
     --max-turns 2 \
-    --output-format stream-json \
-    > "$TURN1_LOG" 2>&1 || true
+    --verbose \
+    --output-format stream-json
+TURN_STATUS=$?
+set -e
+if [ "$TURN_STATUS" -eq 2 ]; then
+    print_skip_notice "$TURN1_LOG" "Multi-turn explicit skill test skipped during Turn 1"
+    exit 2
+fi
+if [ "$TURN_STATUS" -ne 0 ]; then
+    echo "FAIL: claude command exited with code $TURN_STATUS during Turn 1"
+    echo "Log: $TURN1_LOG"
+    exit "$TURN_STATUS"
+fi
 
 echo "Turn 1 complete."
 echo ""
@@ -59,13 +73,26 @@ echo ""
 # Turn 2: Continue with more planning detail
 echo ">>> Turn 2: Continuing planning..."
 TURN2_LOG="$OUTPUT_DIR/turn2.json"
-claude -p "Good analysis. I've already written the plan to docs/superpowers/plans/auth-system.md. Now I'm ready to implement. What are my options for execution?" \
+set +e
+run_claude_capture "$TURN2_LOG" \
+    -p "Good analysis. I've already written the plan to docs/superpowers/plans/auth-system.md. Now I'm ready to implement. What are my options for execution?" \
     --continue \
     --plugin-dir "$PLUGIN_DIR" \
     --dangerously-skip-permissions \
     --max-turns 2 \
-    --output-format stream-json \
-    > "$TURN2_LOG" 2>&1 || true
+    --verbose \
+    --output-format stream-json
+TURN_STATUS=$?
+set -e
+if [ "$TURN_STATUS" -eq 2 ]; then
+    print_skip_notice "$TURN2_LOG" "Multi-turn explicit skill test skipped during Turn 2"
+    exit 2
+fi
+if [ "$TURN_STATUS" -ne 0 ]; then
+    echo "FAIL: claude command exited with code $TURN_STATUS during Turn 2"
+    echo "Log: $TURN2_LOG"
+    exit "$TURN_STATUS"
+fi
 
 echo "Turn 2 complete."
 echo ""
@@ -73,13 +100,26 @@ echo ""
 # Turn 3: The critical test - ask for subagent-driven-development
 echo ">>> Turn 3: Requesting subagent-driven-development..."
 TURN3_LOG="$OUTPUT_DIR/turn3.json"
-claude -p "subagent-driven-development, please" \
+set +e
+run_claude_capture "$TURN3_LOG" \
+    -p "subagent-driven-development, please" \
     --continue \
     --plugin-dir "$PLUGIN_DIR" \
     --dangerously-skip-permissions \
     --max-turns 2 \
-    --output-format stream-json \
-    > "$TURN3_LOG" 2>&1 || true
+    --verbose \
+    --output-format stream-json
+TURN_STATUS=$?
+set -e
+if [ "$TURN_STATUS" -eq 2 ]; then
+    print_skip_notice "$TURN3_LOG" "Multi-turn explicit skill test skipped during Turn 3"
+    exit 2
+fi
+if [ "$TURN_STATUS" -ne 0 ]; then
+    echo "FAIL: claude command exited with code $TURN_STATUS during Turn 3"
+    echo "Log: $TURN3_LOG"
+    exit "$TURN_STATUS"
+fi
 
 echo "Turn 3 complete."
 echo ""

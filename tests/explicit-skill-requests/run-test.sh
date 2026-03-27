@@ -23,6 +23,7 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Get the superpowers plugin root (two levels up)
 PLUGIN_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+source "$SCRIPT_DIR/common.sh"
 
 TIMESTAMP=$(date +%s)
 OUTPUT_DIR="/tmp/superpowers-tests/${TIMESTAMP}/explicit-skill-requests/${SKILL_NAME}"
@@ -68,12 +69,31 @@ echo "Running claude -p with explicit skill request..."
 echo "Prompt: $PROMPT"
 echo ""
 
-timeout 300 claude -p "$PROMPT" \
+set +e
+run_claude_capture "$LOG_FILE" \
+    -p "$PROMPT" \
     --plugin-dir "$PLUGIN_DIR" \
     --dangerously-skip-permissions \
     --max-turns "$MAX_TURNS" \
-    --output-format stream-json \
-    > "$LOG_FILE" 2>&1 || true
+    --verbose \
+    --output-format stream-json
+RUN_STATUS=$?
+set -e
+
+if [ "$RUN_STATUS" -eq 2 ]; then
+    echo ""
+    echo "=== Results ==="
+    print_skip_notice "$LOG_FILE" "Explicit skill request test could not reach Claude reliably"
+    exit 2
+fi
+
+if [ "$RUN_STATUS" -ne 0 ]; then
+    echo ""
+    echo "=== Results ==="
+    echo "FAIL: claude command exited with code $RUN_STATUS"
+    echo "Log: $LOG_FILE"
+    exit "$RUN_STATUS"
+fi
 
 echo ""
 echo "=== Results ==="

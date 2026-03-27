@@ -6,6 +6,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+source "$SCRIPT_DIR/common.sh"
 
 TIMESTAMP=$(date +%s)
 OUTPUT_DIR="/tmp/superpowers-tests/${TIMESTAMP}/explicit-skill-requests/claude-describes"
@@ -36,26 +37,52 @@ EOF
 
 # Turn 1: Have Claude describe execution options including SDD
 echo ">>> Turn 1: Ask Claude to describe execution options..."
-claude -p "I have a plan at docs/superpowers/plans/auth-system.md. Tell me about my options for executing it, including what subagent-driven-development means and how it works." \
+set +e
+run_claude_capture "$OUTPUT_DIR/turn1.json" \
+    -p "I have a plan at docs/superpowers/plans/auth-system.md. Tell me about my options for executing it, including what subagent-driven-development means and how it works." \
     --model haiku \
     --plugin-dir "$PLUGIN_DIR" \
     --dangerously-skip-permissions \
     --max-turns 3 \
-    --output-format stream-json \
-    > "$OUTPUT_DIR/turn1.json" 2>&1 || true
+    --verbose \
+    --output-format stream-json
+TURN_STATUS=$?
+set -e
+if [ "$TURN_STATUS" -eq 2 ]; then
+    print_skip_notice "$OUTPUT_DIR/turn1.json" "Claude-describes-SDD test skipped during Turn 1"
+    exit 2
+fi
+if [ "$TURN_STATUS" -ne 0 ]; then
+    echo "FAIL: claude command exited with code $TURN_STATUS during Turn 1"
+    echo "Log: $OUTPUT_DIR/turn1.json"
+    exit "$TURN_STATUS"
+fi
 echo "Done."
 
 # Turn 2: THE CRITICAL TEST - now that Claude has explained it
 echo ">>> Turn 2: Request subagent-driven-development..."
 FINAL_LOG="$OUTPUT_DIR/turn2.json"
-claude -p "subagent-driven-development, please" \
+set +e
+run_claude_capture "$FINAL_LOG" \
+    -p "subagent-driven-development, please" \
     --continue \
     --model haiku \
     --plugin-dir "$PLUGIN_DIR" \
     --dangerously-skip-permissions \
     --max-turns 2 \
-    --output-format stream-json \
-    > "$FINAL_LOG" 2>&1 || true
+    --verbose \
+    --output-format stream-json
+TURN_STATUS=$?
+set -e
+if [ "$TURN_STATUS" -eq 2 ]; then
+    print_skip_notice "$FINAL_LOG" "Claude-describes-SDD test skipped during Turn 2"
+    exit 2
+fi
+if [ "$TURN_STATUS" -ne 0 ]; then
+    echo "FAIL: claude command exited with code $TURN_STATUS during Turn 2"
+    echo "Log: $FINAL_LOG"
+    exit "$TURN_STATUS"
+fi
 echo "Done."
 echo ""
 
