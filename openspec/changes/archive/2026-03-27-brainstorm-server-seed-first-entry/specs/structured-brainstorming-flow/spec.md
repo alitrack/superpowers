@@ -1,8 +1,5 @@
-# structured-brainstorming-flow Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change structured-brainstorming. Update Purpose after archive.
-## Requirements
 ### Requirement: Hosts present one active answerable question at a time
 The system MUST expose exactly one active answerable structured brainstorming question at a time so the user can focus on the current decision without scanning unrelated prompts, while allowing a pre-session seed-entry surface before the first formal brainstorming question exists.
 
@@ -18,10 +15,6 @@ The system MUST expose exactly one active answerable structured brainstorming qu
 - **WHEN** the user has already answered earlier questions
 - **THEN** the host may show them as read-only history while keeping only one active question available for input
 
-#### Scenario: Session is reopened
-- **WHEN** the browser reloads a persisted brainstorming session that is still waiting for user input
-- **THEN** the host restores the same single active question rather than restarting the flow from the beginning
-
 ### Requirement: Backend controls question sequencing and branching
 The system SHALL let the backend decide which question comes next so branching logic stays consistent across hosts and is driven by brainstorming state rather than by hardcoded host-side start flows.
 
@@ -34,7 +27,7 @@ The system SHALL let the backend decide which question comes next so branching l
 - **THEN** they follow the same branching path for the same sequence of normalized answers
 
 ### Requirement: Hosts wait for the next backend message after submission
-The system MUST treat the host as a renderer and input collector rather than a branching engine, even when the backend internally moves between scoping, reframing, divergence, convergence, and handoff stages.
+The system MUST treat the host as a renderer and input collector rather than a branching engine, while still allowing the host to collect the initial seed before the first backend question exists.
 
 #### Scenario: User submits a seed
 - **WHEN** the browser host captures the initial brainstorming prompt before session creation
@@ -47,14 +40,3 @@ The system MUST treat the host as a renderer and input collector rather than a b
 #### Scenario: Summary is received
 - **WHEN** the backend emits a `summary`
 - **THEN** the host transitions from question entry to review mode and stops presenting another unanswered question
-
-### Requirement: Flow completion produces a structured handoff to implementation or artifact review
-The system MUST conclude the questioning phase with a structured completion message that downstream workflows can consume directly, including the selected direction and enough context about the reasoning path that led there.
-
-#### Scenario: Session converges without file output
-- **WHEN** enough information has been collected but no output file exists yet
-- **THEN** the backend emits a `summary` that restates the selected path and the important decisions behind it
-
-#### Scenario: Session converges with file output
-- **WHEN** the questioning phase produces a concrete deliverable
-- **THEN** the backend emits `artifact_ready` so the host can link to or display the resulting artifact
