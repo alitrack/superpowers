@@ -4,15 +4,19 @@
 TBD - created by archiving change structured-brainstorming. Update Purpose after archive.
 ## Requirements
 ### Requirement: Hosts present one active answerable question at a time
-The system MUST expose exactly one active answerable user decision at a time while still allowing the host to show read-only workflow progress, prior answers, and reviewable draft artifacts around that decision.
+The system MUST expose exactly one active answerable user decision at a time, and the host SHALL present that decision as the dominant mainstage element while limiting default visible history to lightweight recent context.
 
-#### Scenario: Session begins
-- **WHEN** a structured brainstorming session starts after the initial user request
-- **THEN** the host renders one formal question or approval prompt and does not render a second unanswered user decision concurrently
+#### Scenario: Current active decision is visible
+- **WHEN** a session is waiting for the user to answer a question or approval prompt
+- **THEN** the host renders that single decision as the dominant visual focus and does not give equal visual weight to unrelated panels
 
-#### Scenario: Draft review is active
-- **WHEN** the workflow reaches a design-review or spec-review checkpoint
-- **THEN** the host may show the current draft as read-only context while keeping only one active approval decision available for input
+#### Scenario: Prior answers exist
+- **WHEN** earlier steps have already been completed
+- **THEN** the host may show recent supporting context for only the most recent `2-3` steps by default while keeping the current active decision primary
+
+#### Scenario: Full history is requested
+- **WHEN** the user explicitly asks to review the full prior thread
+- **THEN** the host reveals the broader history without replacing the current mainstage focus unless the session is already complete
 
 ### Requirement: Backend controls question sequencing and branching
 The system SHALL let the backend decide which user-facing question, hidden automation step, review checkpoint, or completion state comes next so workflow behavior stays consistent across hosts and is not hardcoded into individual renderers.
@@ -57,3 +61,4 @@ The system MUST present workflow stages to default users without requiring them 
 #### Scenario: Completion state is shown
 - **WHEN** the host presents the final `spec + plan` bundle
 - **THEN** it describes the result in user-facing terms rather than engineering workflow jargon
+

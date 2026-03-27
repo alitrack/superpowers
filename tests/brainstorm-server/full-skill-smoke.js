@@ -2,6 +2,7 @@ const { spawn } = require('child_process');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const assert = require('assert');
 
 const REPO_ROOT = path.join(__dirname, '..', '..');
 const SERVER_PATH = path.join(REPO_ROOT, 'skills/brainstorming/scripts/server.cjs');
@@ -141,10 +142,18 @@ async function main() {
     }
 
     const appChecks = {
+      hasMainstageShell: app.body.includes('brainstorm-mainstage-shell'),
+      hasCurrentDecisionLabel: app.body.includes('Current Decision'),
+      hasRecentContextRail: app.body.includes('recent-context-rail'),
+      hasHistoryToggle: app.body.includes('Open Full History'),
+      hasCompletionSurface: app.body.includes('completion-bundle-copy'),
       hidesGenerationMode: !app.body.includes('generationMode'),
       hidesSubagentTerm: !app.body.toLowerCase().includes('subagent'),
       hidesGitTerm: !app.body.toLowerCase().includes('git-backed')
     };
+    Object.entries(appChecks).forEach(([key, value]) => {
+      assert(value, `app shell check failed: ${key}`);
+    });
 
     let session = JSON.parse((await request('POST', '/api/sessions', {
       completionMode: 'artifact',

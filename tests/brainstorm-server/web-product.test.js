@@ -90,35 +90,23 @@ async function runTests() {
 
     console.log('\n--- Web Product ---');
 
-    await test('serves the browser-first app shell at /app', async () => {
+    await test('serves the question-first mainstage shell at /app', async () => {
       const res = await request('GET', '/app');
       assert.strictEqual(res.status, 200);
-      assert(res.body.includes('Research Asset Workbench'));
-      assert(res.body.includes('Research Assets'));
-      assert(res.body.includes('Project Library'));
-      assert(res.body.includes('Research Workspace'));
-      assert(res.body.includes('Publish Review'));
-      assert(res.body.includes('Review Requests'));
-      assert(res.body.includes('V1 Governance Lens'));
-      assert(res.body.includes('governance-role-select'));
-      assert(res.body.includes('Auditor'));
-      assert(/Permissions\s*&amp;\s*Audit/.test(res.body));
-      assert(res.body.includes('asset-library-list'));
-      assert(res.body.includes('project-library-list'));
-      assert(res.body.includes('review-request-queue'));
-      assert(res.body.includes('bundle-preview-status'));
-      assert(res.body.includes('/api/assets'));
-      assert(res.body.includes('/api/workspaces'));
-      assert(res.body.includes('/api/review-requests'));
-      assert(res.body.includes('/api/audit?workspaceId='));
-      assert(res.body.includes('New Session'));
+      assert(res.body.includes('brainstorm-mainstage-shell'));
+      assert(res.body.includes('mainstage-primary'));
+      assert(res.body.includes('recent-context-rail'));
+      assert(res.body.includes('history-toggle-button'));
+      assert(res.body.includes('mainstage-completion-surface'));
+      assert(res.body.includes('Current Decision'));
       assert(res.body.includes('Start A New Brainstorm'));
-      assert(res.body.includes('The full result is shown directly below'));
-      assert(res.body.includes('不需要手动去路径里找文件'));
-      assert(res.body.includes('persistent-start-artifact'));
-      assert(!res.body.includes('Start with the question that needs real thinking'));
-      assert(!res.body.includes('seed-entry-input'));
-      assert(!res.body.includes("return createSession('artifact');"));
+      assert(res.body.includes('Only the latest 2-3 completed steps stay visible by default'));
+      assert(res.body.includes('Open Full History'));
+      assert(res.body.includes('completion-bundle-copy'));
+      assert(!res.body.includes('Research Asset Workbench'));
+      assert(!res.body.includes('V1 Governance Lens'));
+      assert(!res.body.includes('Research Assets'));
+      assert(!res.body.includes('Publish Review'));
     });
 
     await test('does not auto-create an empty session on fresh load', async () => {

@@ -99,6 +99,7 @@ h1 { color: #333; } p { color: #666; }</style>
 const frameTemplate = fs.readFileSync(path.join(__dirname, 'frame-template.html'), 'utf-8');
 const helperScript = fs.readFileSync(path.join(__dirname, 'helper.js'), 'utf-8');
 const structuredHostScript = fs.readFileSync(path.join(__dirname, 'structured-host.cjs'), 'utf-8');
+const webMainstageScript = fs.readFileSync(path.join(__dirname, 'web-mainstage.cjs'), 'utf-8');
 const webAppShellTemplate = fs.readFileSync(path.join(__dirname, 'web-app-shell.html'), 'utf-8');
 const { createSessionManager } = require('./web-session-manager.cjs');
 const { createFakeCodexRuntimeAdapter } = require('./codex-runtime-adapter.cjs');
@@ -127,10 +128,15 @@ function wrapInFrame(content) {
 }
 
 function renderWebAppShell() {
-  return webAppShellTemplate.replace(
-    '<!-- STRUCTURED_HOST_SCRIPT -->',
-    '<script>\n' + structuredHostScript + '\n</script>'
-  );
+  return webAppShellTemplate
+    .replace(
+      '<!-- BRAINSTORM_MAINSTAGE_SCRIPT -->',
+      '<script>\n' + webMainstageScript + '\n</script>'
+    )
+    .replace(
+      '<!-- STRUCTURED_HOST_SCRIPT -->',
+      '<script>\n' + structuredHostScript + '\n</script>'
+    );
 }
 
 function getNewestScreen() {

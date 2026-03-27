@@ -1,8 +1,5 @@
-# brainstorm-web-ui Specification
+## MODIFIED Requirements
 
-## Purpose
-Define the browser-first brainstorming experience that lets a user complete a structured flow inside the Web UI without terminal dependence.
-## Requirements
 ### Requirement: The browser can complete a structured brainstorming flow without terminal dependence
 The system MUST let a user start, answer, and complete a structured brainstorming session inside the Web UI without requiring the terminal as the primary interaction channel, and the current active decision MUST remain the primary focus of the product shell while supporting context stays secondary.
 
@@ -17,15 +14,3 @@ The system MUST let a user start, answer, and complete a structured brainstormin
 #### Scenario: Session advances in the browser
 - **WHEN** the backend returns the next `question`, `summary`, or `artifact_ready`
 - **THEN** the browser updates the session view directly instead of instructing the user to switch to the terminal
-
-### Requirement: The product UI hides protocol metadata by default
-The system MUST present a product-facing experience rather than a protocol-debug screen.
-
-#### Scenario: Question is rendered for an end user
-- **WHEN** the browser shows a structured brainstorming step
-- **THEN** protocol fields such as internal type names, question ids, or transport debug markers are hidden unless an explicit debug mode is enabled
-
-#### Scenario: User reviews prior progress
-- **WHEN** the browser shows session history or progress
-- **THEN** it uses user-facing labels and summaries rather than raw transport payload fields
-
