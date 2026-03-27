@@ -16,15 +16,19 @@ The system MUST persist provider-backed runtime state so a structured brainstorm
 - **THEN** the runtime restores the saved state before accepting another browser-submitted `answer`
 
 ### Requirement: Structured brainstorming runtime owns active-question sequencing
-The system MUST run structured brainstorming question sequencing in a backend-side runtime so hosts do not decide what question comes next, and Codex-backed sessions MUST derive that questioning strategy from the current brainstorming skill guidance plus the session seed.
+The system MUST run structured brainstorming question sequencing in a backend-side runtime so hosts do not decide what question comes next, and the real Codex-backed path MUST bootstrap that sequencing from the required repository skills before the first user-facing response.
 
-#### Scenario: Seeded Codex-backed session starts
-- **WHEN** a structured brainstorming session is initialized with an initial user prompt on a Codex-backed runtime
-- **THEN** the backend runtime emits the first formal `question`, `summary`, or `artifact_ready` message based on both the seed and current brainstorming skill guidance
+#### Scenario: Real seeded session starts
+- **WHEN** a real Codex-backed structured brainstorming session is initialized with a user seed
+- **THEN** the runtime first loads the required repository skills and only then emits the first `question`, `summary`, or `artifact_ready` message
+
+#### Scenario: Skill bootstrap requires repo access
+- **WHEN** the real runtime needs to load the required repository skills
+- **THEN** its base instructions allow reading those specific repository files without opening unrelated repo inspection by default
 
 #### Scenario: Normalized answer is received
 - **WHEN** the host submits a normalized `answer` message
-- **THEN** the backend runtime updates the session's facilitation state and decides whether to emit the next `question`, a `summary`, or an `artifact_ready` message using the skill-backed policy
+- **THEN** the backend runtime continues deciding whether to emit the next `question`, a `summary`, or an `artifact_ready` message while staying grounded in the loaded skills and existing browser contract
 
 ### Requirement: Browser structured host behaves as a renderer-only client
 The browser structured brainstorming host MUST render backend-provided messages and submit normalized answers without embedding its own branching tree, while owning only the pre-session seed capture needed to start the runtime with the correct topic.
