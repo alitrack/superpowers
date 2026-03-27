@@ -49,6 +49,12 @@ test('classifies active sessions into question mode and keeps the current decisi
   assert.strictEqual(view.history.visibleEntries.length, 2);
   assert.strictEqual(view.history.hiddenCount, 0);
   assert.strictEqual(view.newBrainstorm.visible, true);
+  assert(view.canvasWorkspace, 'expected derived canvas workspace');
+  assert.strictEqual(view.canvasWorkspace.mode, 'focused');
+  assert.strictEqual(view.canvasWorkspace.anchorCard.kind, 'active-decision');
+  assert.strictEqual(view.canvasWorkspace.anchorCard.questionId, 'seed-path');
+  assert.strictEqual(view.canvasWorkspace.supportingCards.length, 2);
+  assert(view.canvasWorkspace.dock.hasNewBrainstormEntry);
 });
 
 test('classifies spec approval checkpoints into review mode and exposes the draft as supporting context', () => {
@@ -80,6 +86,13 @@ test('classifies spec approval checkpoints into review mode and exposes the draf
   assert.strictEqual(view.supportingArtifact.title, 'Structured Brainstorming Workflow Design');
   assert.strictEqual(view.history.visibleEntries.length, 3);
   assert.strictEqual(view.history.hiddenCount, 1);
+  assert(view.canvasWorkspace, 'expected derived canvas workspace');
+  assert.strictEqual(view.canvasWorkspace.anchorCard.kind, 'review-decision');
+  assert(view.canvasWorkspace.supportingCards.some((card) => card.kind === 'review-draft'));
+  assert.strictEqual(
+    view.canvasWorkspace.supportingCards.filter((card) => card.isAnswerable).length,
+    0
+  );
 });
 
 test('caps recent context at three steps by default but reveals the full history on demand', () => {
@@ -101,7 +114,7 @@ test('caps recent context at three steps by default but reveals the full history
   };
 
   const collapsed = deriveMainstageView(session);
-  const expanded = deriveMainstageView(session, { historyExpanded: true });
+  const expanded = deriveMainstageView(session, { historyExpanded: true, workspaceMode: 'overview' });
 
   assert.deepStrictEqual(
     collapsed.history.visibleEntries.map((entry) => entry.questionId),
@@ -112,6 +125,10 @@ test('caps recent context at three steps by default but reveals the full history
   assert.strictEqual(expanded.history.visibleEntries.length, 5);
   assert.strictEqual(expanded.history.hiddenCount, 0);
   assert.strictEqual(expanded.history.expanded, true);
+  assert.strictEqual(collapsed.canvasWorkspace.mode, 'focused');
+  assert.strictEqual(expanded.canvasWorkspace.mode, 'overview');
+  assert.strictEqual(collapsed.canvasWorkspace.supportingCards.length, 3);
+  assert.strictEqual(expanded.canvasWorkspace.supportingCards.length, 5);
 });
 
 test('switches finished artifact sessions into a dedicated completion mode', () => {
@@ -150,6 +167,10 @@ test('switches finished artifact sessions into a dedicated completion mode', () 
   assert.strictEqual(view.completion.bundlePath, '/api/sessions/session-complete/artifacts/current');
   assert.strictEqual(view.completion.artifacts.length, 2);
   assert.strictEqual(view.newBrainstorm.visible, true);
+  assert(view.canvasWorkspace, 'expected derived canvas workspace');
+  assert.strictEqual(view.canvasWorkspace.anchorCard.kind, 'completion-cluster');
+  assert.strictEqual(view.canvasWorkspace.completionCluster.cards.length, 3);
+  assert(view.canvasWorkspace.supportingCards.some((card) => card.kind === 'recent-step'));
 });
 
 if (process.exitCode) {

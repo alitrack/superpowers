@@ -90,19 +90,22 @@ async function runTests() {
 
     console.log('\n--- Web Product ---');
 
-    await test('serves the question-first mainstage shell at /app', async () => {
+    await test('serves the brainstorming canvas workspace shell at /app', async () => {
       const res = await request('GET', '/app');
       assert.strictEqual(res.status, 200);
-      assert(res.body.includes('brainstorm-mainstage-shell'));
-      assert(res.body.includes('mainstage-primary'));
-      assert(res.body.includes('recent-context-rail'));
+      assert(res.body.includes('brainstorm-canvas-workspace'));
+      assert(res.body.includes('canvas-anchor-card'));
+      assert(res.body.includes('canvas-supporting-cards'));
+      assert(res.body.includes('workspace-mode-toggle'));
+      assert(res.body.includes('canvas-inspector'));
       assert(res.body.includes('history-toggle-button'));
-      assert(res.body.includes('mainstage-completion-surface'));
       assert(res.body.includes('Current Decision'));
       assert(res.body.includes('Start A New Brainstorm'));
+      assert(res.body.includes('Focused View'));
+      assert(res.body.includes('Overview'));
       assert(res.body.includes('Only the latest 2-3 completed steps stay visible by default'));
       assert(res.body.includes('Open Full History'));
-      assert(res.body.includes('completion-bundle-copy'));
+      assert(res.body.includes('completion-cluster-copy'));
       assert(!res.body.includes('Research Asset Workbench'));
       assert(!res.body.includes('V1 Governance Lens'));
       assert(!res.body.includes('Research Assets'));

@@ -142,11 +142,14 @@ async function main() {
     }
 
     const appChecks = {
-      hasMainstageShell: app.body.includes('brainstorm-mainstage-shell'),
+      hasCanvasWorkspace: app.body.includes('brainstorm-canvas-workspace'),
+      hasAnchorCard: app.body.includes('canvas-anchor-card'),
+      hasSupportingCards: app.body.includes('canvas-supporting-cards'),
+      hasWorkspaceModeToggle: app.body.includes('workspace-mode-toggle'),
+      hasInspector: app.body.includes('canvas-inspector'),
       hasCurrentDecisionLabel: app.body.includes('Current Decision'),
-      hasRecentContextRail: app.body.includes('recent-context-rail'),
       hasHistoryToggle: app.body.includes('Open Full History'),
-      hasCompletionSurface: app.body.includes('completion-bundle-copy'),
+      hasCompletionSurface: app.body.includes('completion-cluster-copy'),
       hidesGenerationMode: !app.body.includes('generationMode'),
       hidesSubagentTerm: !app.body.toLowerCase().includes('subagent'),
       hidesGitTerm: !app.body.toLowerCase().includes('git-backed')

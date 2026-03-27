@@ -2,6 +2,8 @@
   const RECENT_CONTEXT_LIMIT = 3;
   const REVIEW_STAGE_IDS = new Set(['review-spec', 'refine-spec', 'review-blocked']);
   const REVIEW_QUESTION_IDS = new Set(['workflow-review-spec', 'workflow-revise-spec']);
+  const WORKSPACE_MODE_FOCUSED = 'focused';
+  const WORKSPACE_MODE_OVERVIEW = 'overview';
 
   function lastEntries(entries, count) {
     if (!Array.isArray(entries) || entries.length === 0) {
@@ -141,20 +143,160 @@
     };
   }
 
+  function extractSynthesisDirections(session) {
+    const message = session && session.currentMessage && typeof session.currentMessage === 'object'
+      ? session.currentMessage
+      : {};
+    const summary = session && session.summary && typeof session.summary === 'object'
+      ? session.summary
+      : {};
+    const synthesis = (message.synthesis && typeof message.synthesis === 'object')
+      ? message.synthesis
+      : ((summary.synthesis && typeof summary.synthesis === 'object') ? summary.synthesis : null);
+
+    if (!synthesis) {
+      return [];
+    }
+
+    const shortlisted = Array.isArray(synthesis.shortlistedDirections) ? synthesis.shortlistedDirections : [];
+    if (shortlisted.length > 0) {
+      return shortlisted;
+    }
+
+    return Array.isArray(synthesis.exploredDirections) ? synthesis.exploredDirections : [];
+  }
+
+  function createSupportingCard(id, kind, title, body, options) {
+    const resolved = options && typeof options === 'object' ? options : {};
+    return {
+      id,
+      kind,
+      title,
+      body,
+      badge: resolved.badge || null,
+      isAnswerable: Boolean(resolved.isAnswerable),
+      inspectable: resolved.inspectable !== false,
+      previewText: resolved.previewText || null
+    };
+  }
+
+  function buildCanvasWorkspace(session, options, mode, historyModel, supportingArtifact, completion, currentDecision) {
+    const resolvedOptions = options && typeof options === 'object' ? options : {};
+    const workspaceMode = resolvedOptions.workspaceMode === WORKSPACE_MODE_OVERVIEW
+      ? WORKSPACE_MODE_OVERVIEW
+      : WORKSPACE_MODE_FOCUSED;
+    const message = session && session.currentMessage && typeof session.currentMessage === 'object'
+      ? session.currentMessage
+      : {};
+
+    const supportingCards = historyModel.visibleEntries.map((entry, index) => createSupportingCard(
+      `history-${entry.questionId || index + 1}`,
+      'recent-step',
+      entry.question || entry.questionId || `Step ${index + 1}`,
+      entry.answer || '',
+      { badge: 'Recent Step' }
+    ));
+
+    const directions = extractSynthesisDirections(session).slice(0, workspaceMode === WORKSPACE_MODE_OVERVIEW ? 3 : 2);
+    directions.forEach((direction, index) => {
+      supportingCards.push(createSupportingCard(
+        `direction-${index + 1}`,
+        'shortlisted-direction',
+        `Direction ${index + 1}`,
+        direction,
+        { badge: 'Direction' }
+      ));
+    });
+
+    if (mode === 'review' && supportingArtifact) {
+      supportingCards.push(createSupportingCard(
+        'review-draft',
+        'review-draft',
+        supportingArtifact.title || 'Current draft',
+        supportingArtifact.previewText || 'Draft preview unavailable.',
+        { badge: 'Draft', previewText: supportingArtifact.previewText || '' }
+      ));
+    }
+
+    let anchorKind = 'active-decision';
+    if (mode === 'review') {
+      anchorKind = 'review-decision';
+    } else if (mode === 'completion') {
+      anchorKind = 'completion-cluster';
+    } else if (mode === 'summary') {
+      anchorKind = 'summary-anchor';
+    } else if (mode === 'empty') {
+      anchorKind = 'empty-anchor';
+    }
+
+    const completionCluster = completion
+      ? {
+          title: completion.title,
+          description: completion.description,
+          cards: [
+            createSupportingCard(
+              'completion-bundle',
+              'result-bundle',
+              'Result bundle',
+              completion.description,
+              { badge: 'Bundle', previewText: completion.bundlePath || '' }
+            )
+          ].concat(completion.artifacts.map((artifact) => createSupportingCard(
+            `artifact-${artifact.kind}`,
+            artifact.kind === 'spec' ? 'design-spec' : 'implementation-plan',
+            artifact.title || artifact.kind,
+            artifact.previewText || '',
+            {
+              badge: artifact.kind === 'spec' ? 'Spec' : 'Plan',
+              previewText: artifact.relativePath || artifact.previewText || ''
+            }
+          )))
+        }
+      : null;
+
+    const selectedCard = supportingCards.find((card) => card.id === resolvedOptions.inspectedCardId) || null;
+
+    return {
+      mode: workspaceMode,
+      anchorCard: {
+        kind: anchorKind,
+        title: currentDecision.title,
+        description: currentDecision.description,
+        questionId: message.questionId || null,
+        isAnswerable: mode === 'question' || mode === 'review'
+      },
+      supportingCards,
+      completionCluster,
+      dock: {
+        hasNewBrainstormEntry: true,
+        hasFullHistoryEntry: historyModel.canExpand || historyModel.expanded,
+        canToggleWorkspaceMode: true,
+        workspaceMode
+      },
+      inspector: {
+        selectedCardId: selectedCard ? selectedCard.id : null,
+        selectedCard
+      }
+    };
+  }
+
   function deriveMainstageView(session, options) {
     if (!session || !session.currentMessage) {
+      const currentDecision = {
+        label: 'Current Decision',
+        title: 'Start with one real problem.',
+        description: 'Use the persistent composer to begin a new brainstorming session.'
+      };
+      const history = buildHistoryModel(null, options);
       return {
         mode: 'empty',
         primaryMessage: null,
-        currentDecision: {
-          label: 'Current Decision',
-          title: 'Start with one real problem.',
-          description: 'Use the persistent composer to begin a new brainstorming session.'
-        },
-        history: buildHistoryModel(null, options),
+        currentDecision,
+        history,
         supportingArtifact: null,
         completion: null,
-        newBrainstorm: { visible: true }
+        newBrainstorm: { visible: true },
+        canvasWorkspace: buildCanvasWorkspace(null, options, 'empty', history, null, null, currentDecision)
       };
     }
 
@@ -168,20 +310,28 @@
       mode = 'review';
     }
 
+    const currentDecision = buildCurrentDecision(session, mode);
+    const history = buildHistoryModel(session, options);
+    const supportingArtifact = mode === 'review' ? pickSupportingArtifact(session) : null;
+    const completion = mode === 'completion' ? buildCompletionPayload(session) : null;
+
     return {
       mode,
       primaryMessage: message,
-      currentDecision: buildCurrentDecision(session, mode),
+      currentDecision,
       stage: session.workflow && session.workflow.visibleStage ? session.workflow.visibleStage : null,
-      history: buildHistoryModel(session, options),
-      supportingArtifact: mode === 'review' ? pickSupportingArtifact(session) : null,
-      completion: mode === 'completion' ? buildCompletionPayload(session) : null,
-      newBrainstorm: { visible: true }
+      history,
+      supportingArtifact,
+      completion,
+      newBrainstorm: { visible: true },
+      canvasWorkspace: buildCanvasWorkspace(session, options, mode, history, supportingArtifact, completion, currentDecision)
     };
   }
 
   const api = {
     RECENT_CONTEXT_LIMIT,
+    WORKSPACE_MODE_FOCUSED,
+    WORKSPACE_MODE_OVERVIEW,
     deriveMainstageView
   };
 

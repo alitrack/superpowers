@@ -1,8 +1,5 @@
-# brainstorm-mainstage-ui Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change brainstorm-mainstage-product-v1. Update Purpose after archive.
-## Requirements
 ### Requirement: The browser mainstage SHALL keep the current active decision as the dominant focus
 The browser brainstorming product SHALL make the current active question or approval decision the dominant visual focus of the canvas workspace mainstage instead of giving equal weight to surrounding cards or panels.
 
@@ -35,4 +32,3 @@ The browser brainstorming product SHALL present the finished `spec + plan` bundl
 #### Scenario: User starts another brainstorm after completion
 - **WHEN** the user wants to begin a new brainstorm while viewing a completed session
 - **THEN** the fresh-topic entry path remains clearly available inside the workspace without hiding or overwriting the completed bundle by default
-
