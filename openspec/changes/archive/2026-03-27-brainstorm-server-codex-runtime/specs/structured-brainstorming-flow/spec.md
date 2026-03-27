@@ -1,13 +1,10 @@
-# structured-brainstorming-flow Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change structured-brainstorming. Update Purpose after archive.
-## Requirements
 ### Requirement: Hosts present one active answerable question at a time
 The system MUST expose exactly one active answerable structured brainstorming question at a time so the user can focus on the current decision without scanning unrelated prompts, even when the session is resumed from persisted state.
 
 #### Scenario: Session begins
-- **WHEN** a structured brainstorming session starts after the initial user request
+- **WHEN** a real structured brainstorming session starts after the initial user request
 - **THEN** the host renders one formal question and does not render a second unanswered question concurrently
 
 #### Scenario: Prior answers exist

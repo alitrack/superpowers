@@ -1,9 +1,5 @@
-# structured-brainstorming-runtime Specification
+## ADDED Requirements
 
-## Purpose
-Define the backend-side runtime behavior that owns structured brainstorming session state and question sequencing while keeping hosts renderer-only.
-
-## Requirements
 ### Requirement: Provider-backed runtime persists resumable session continuity
 The system MUST persist provider-backed runtime state so a structured brainstorming session can continue after reload without losing the current active message.
 
@@ -15,8 +11,10 @@ The system MUST persist provider-backed runtime state so a structured brainstorm
 - **WHEN** a persisted structured brainstorming session is resumed
 - **THEN** the runtime restores the saved state before accepting another browser-submitted `answer`
 
+## MODIFIED Requirements
+
 ### Requirement: Structured brainstorming runtime owns active-question sequencing
-The system MUST run structured brainstorming question sequencing in a session-scoped backend runtime so hosts do not decide what question comes next and concurrent browser sessions do not share one global state.
+The system MUST run structured brainstorming question sequencing in a backend-side runtime so hosts do not decide what question comes next.
 
 #### Scenario: Session starts
 - **WHEN** a structured brainstorming session is initialized through the real product runtime
@@ -41,7 +39,7 @@ The browser structured brainstorming host MUST render backend-provided messages 
 The in-repo brainstorm server MUST keep its local demo/runtime path contract-compatible with the real product runtime so developer verification does not drift from browser-product expectations.
 
 #### Scenario: Demo flow advances
-- **WHEN** the local runtime processes a browser-submitted `answer`
+- **WHEN** the local demo runtime processes a browser-submitted `answer`
 - **THEN** the next outbound message still conforms to the existing `question`, `summary`, or `artifact_ready` transport contract
 
 #### Scenario: Product runtime advances
