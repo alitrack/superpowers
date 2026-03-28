@@ -250,7 +250,8 @@
       gap: 0.75rem;
     }
 
-    button {
+    button,
+    .completion-action {
       appearance: none;
       border: 1px solid var(--border);
       border-radius: 999px;
@@ -262,7 +263,15 @@
       transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
     }
 
-    button:hover {
+    .completion-action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+    }
+
+    button:hover,
+    .completion-action:hover {
       transform: translateY(-1px);
       border-color: var(--border-strong);
       box-shadow: 0 16px 28px rgba(58, 37, 26, 0.1);
@@ -398,6 +407,45 @@
     .supporting-card-list {
       display: grid;
       gap: 0.8rem;
+    }
+
+    .completion-action-row,
+    .completion-hero,
+    .completion-section-grid,
+    .completion-package-grid {
+      display: grid;
+      gap: 0.8rem;
+    }
+
+    .completion-action-row {
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      margin-top: 0.9rem;
+    }
+
+    .completion-hero-card {
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,246,238,0.96)),
+        radial-gradient(circle at top right, rgba(157, 75, 46, 0.08), transparent 28%);
+    }
+
+    .completion-card p {
+      margin: 0.38rem 0 0 0;
+      color: var(--muted);
+      line-height: 1.68;
+      font-size: 0.92rem;
+    }
+
+    .completion-package-head {
+      display: grid;
+      gap: 0.35rem;
+      margin-top: 1rem;
+    }
+
+    .completion-package-head p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.68;
+      font-size: 0.9rem;
     }
 
     .completion-card,
@@ -621,10 +669,22 @@
             <section id="session-root" class="stage-host"></section>
 
             <section id="mainstage-completion-surface" class="completion-surface" hidden>
-              <div class="panel-label">Completed Bundle</div>
+              <div class="panel-label">Finished Result</div>
               <strong id="completion-title">Spec and plan are ready</strong>
-              <p id="completion-cluster-copy">When the workflow finishes, the result bundle becomes the visible completion cluster inside the workspace.</p>
-              <div id="completion-grid" class="completion-grid"></div>
+              <p id="completion-cluster-copy">When the workflow finishes, the finished result becomes the visible completion cluster inside the workspace.</p>
+              <div id="completion-action-row" class="completion-action-row">
+                <a id="completion-export-markdown" class="completion-action primary-button" href="#" download="brainstorm-result.md">Export Markdown</a>
+                <a id="completion-export-json" class="completion-action" href="#" download="brainstorm-result.json">Export JSON</a>
+              </div>
+              <div id="completion-hero" class="completion-hero"></div>
+              <div id="completion-section-grid" class="completion-section-grid"></div>
+              <div id="completion-supporting-package" class="completion-package">
+                <div class="completion-package-head">
+                  <div class="panel-label">Supporting Package</div>
+                  <p>Spec、plan 和 bundle 仍然保留在这里，但它们现在是支撑结果的资产，而不是主舞台本身。</p>
+                </div>
+                <div id="completion-package-grid" class="completion-package-grid"></div>
+              </div>
             </section>
           </section>
 
@@ -669,7 +729,14 @@
       const historyToggleButtonEl = document.getElementById('history-toggle-button');
       const completionSurfaceEl = document.getElementById('mainstage-completion-surface');
       const completionTitleEl = document.getElementById('completion-title');
-      const completionGridEl = document.getElementById('completion-grid');
+      const completionClusterCopyEl = document.getElementById('completion-cluster-copy');
+      const completionActionRowEl = document.getElementById('completion-action-row');
+      const completionExportMarkdownEl = document.getElementById('completion-export-markdown');
+      const completionExportJsonEl = document.getElementById('completion-export-json');
+      const completionHeroEl = document.getElementById('completion-hero');
+      const completionSectionGridEl = document.getElementById('completion-section-grid');
+      const completionSupportingPackageEl = document.getElementById('completion-supporting-package');
+      const completionPackageGridEl = document.getElementById('completion-package-grid');
       const inspectorTitleEl = document.getElementById('inspector-title');
       const inspectorBodyEl = document.getElementById('inspector-body');
       const workspaceModeFocusedEl = document.getElementById('workspace-mode-focused');
@@ -837,47 +904,52 @@
       }
 
       async function renderCompletionSurface(view) {
-        if (!view.canvasWorkspace || !view.canvasWorkspace.completionCluster) {
+        if (!view.completion || !view.canvasWorkspace || !view.canvasWorkspace.completionCluster) {
           completionSurfaceEl.hidden = true;
-          completionGridEl.innerHTML = '';
+          completionHeroEl.innerHTML = '';
+          completionSectionGridEl.innerHTML = '';
+          completionPackageGridEl.innerHTML = '';
           return;
         }
 
         completionSurfaceEl.hidden = false;
-        completionTitleEl.textContent = view.canvasWorkspace.completionCluster.title;
+        completionTitleEl.textContent = view.completion.title;
+        completionClusterCopyEl.textContent = view.completion.description || 'Review the finished result, then export or inspect the supporting package.';
 
-        const cards = [];
-        if (view.completion && view.completion.bundlePath) {
-          let bundleText = 'Bundle preview unavailable.';
-          try {
-            const response = await fetch(view.completion.bundlePath);
-            bundleText = await response.text();
-          } catch (_error) {
-            bundleText = 'Bundle preview unavailable.';
-          }
-          cards.push(
-            `<div class="completion-card">` +
-              `<strong>Result bundle</strong>` +
-              `<span>${escapeHtml(view.canvasWorkspace.completionCluster.description || view.completion.description || '')}</span>` +
-              `<div class="path">${escapeHtml(view.completion.bundlePath)}</div>` +
-              `<div class="artifact-block">${escapeHtml(bundleText)}</div>` +
-            `</div>`
-          );
-        }
+        const exportPaths = view.completion.exportPaths || {};
+        completionActionRowEl.hidden = !exportPaths.markdownPath && !exportPaths.jsonPath;
+        completionExportMarkdownEl.hidden = !exportPaths.markdownPath;
+        completionExportJsonEl.hidden = !exportPaths.jsonPath;
+        completionExportMarkdownEl.href = exportPaths.markdownPath || '#';
+        completionExportJsonEl.href = exportPaths.jsonPath || '#';
 
-        view.canvasWorkspace.completionCluster.cards
-          .filter((card) => card.kind !== 'result-bundle')
-          .forEach((card) => {
-            cards.push(
-              `<div class="completion-card">` +
-                `<strong>${escapeHtml(card.title || card.kind)}</strong>` +
-                `<span>${escapeHtml(card.body || '')}</span>` +
-                `<div class="path">${escapeHtml(card.previewText || 'Generated in workspace docs.')}</div>` +
-              `</div>`
-            );
-          });
+        completionHeroEl.innerHTML = (
+          `<div class="completion-card completion-hero-card">` +
+            `<div class="canvas-card-badge">Recommendation</div>` +
+            `<strong>${escapeHtml(view.completion.recommendationTitle || view.completion.title || 'Finished result')}</strong>` +
+            `<p>${escapeHtml(view.completion.recommendationSummary || view.completion.description || '')}</p>` +
+          `</div>`
+        );
 
-        completionGridEl.innerHTML = cards.join('');
+        const sectionCards = (view.completion.sections || []).map((section) => (
+          `<div class="completion-card">` +
+            `<div class="canvas-card-badge">Result Section</div>` +
+            `<strong>${escapeHtml(section.title || 'Section')}</strong>` +
+            `<div class="artifact-block">${escapeHtml((section.items || []).join('\n'))}</div>` +
+          `</div>`
+        ));
+        completionSectionGridEl.innerHTML = sectionCards.join('');
+
+        const packageCards = (view.completion.supportingArtifacts || []).map((artifact) => (
+          `<div class="completion-card">` +
+            `<div class="canvas-card-badge">${escapeHtml(artifact.label || artifact.kind || 'Artifact')}</div>` +
+            `<strong>${escapeHtml(artifact.title || 'Supporting artifact')}</strong>` +
+            `<span>${escapeHtml(artifact.previewText || '')}</span>` +
+            `<div class="path">${escapeHtml(artifact.path || '')}</div>` +
+          `</div>`
+        ));
+        completionSupportingPackageEl.hidden = packageCards.length === 0;
+        completionPackageGridEl.innerHTML = packageCards.join('');
       }
 
       function renderEmptyStage() {
@@ -896,6 +968,9 @@
         inspectorTitleEl.textContent = 'Canvas Inspector';
         inspectorBodyEl.textContent = 'Select a supporting card to inspect it without replacing the current active decision.';
         completionSurfaceEl.hidden = true;
+        completionHeroEl.innerHTML = '';
+        completionSectionGridEl.innerHTML = '';
+        completionPackageGridEl.innerHTML = '';
         rootEl.innerHTML = (
           `<div class="empty-stage">` +
             `<div class="panel-label">Current Decision</div>` +
@@ -951,7 +1026,7 @@
         renderSupportingCards(view, session);
         renderInspector(view);
 
-        if (view.mode === 'completion') {
+        if (view.mode === 'completion' || view.mode === 'summary') {
           rootEl.innerHTML = '<div class="empty-stage"><div class="panel-label">Completion Cluster</div><h3>The result now becomes the visible cluster.</h3><p>当前 workspace 已完成交付，仍可通过 supporting cards 回看路径，或直接从上方开始新的 brainstorm。</p></div>';
         } else {
           host.renderMessage(session.currentMessage);

@@ -143,6 +143,50 @@ test('switches finished artifact sessions into a dedicated completion mode', () 
       path: '/api/sessions/session-complete/artifacts/current',
       artifactType: 'workflow_bundle'
     },
+    finishedResult: {
+      title: 'Recommendation: Browser-first result surface',
+      recommendationTitle: 'Choose: Browser-first result surface',
+      recommendationSummary: 'Show the mature brainstorm deliverable before the supporting package.',
+      sections: [
+        {
+          id: 'recommendation',
+          title: 'Recommendation',
+          items: ['Choose: Browser-first result surface']
+        },
+        {
+          id: 'next-actions',
+          title: 'Next Actions',
+          items: ['Ship the result panel and export actions.']
+        }
+      ],
+      exportPaths: {
+        jsonPath: '/api/sessions/session-complete/result',
+        markdownPath: '/api/sessions/session-complete/result.md'
+      },
+      supportingArtifacts: [
+        {
+          kind: 'bundle',
+          label: 'Result Bundle',
+          title: 'session-complete-bundle.md',
+          path: '/api/sessions/session-complete/artifacts/current',
+          previewText: 'Spec and plan bundle.'
+        },
+        {
+          kind: 'spec',
+          label: 'Design Spec',
+          title: 'Structured Brainstorming Workflow Design',
+          path: 'docs/superpowers/specs/demo.md',
+          previewText: '# Design Spec'
+        },
+        {
+          kind: 'plan',
+          label: 'Implementation Plan',
+          title: 'Structured Brainstorming Workflow Plan',
+          path: 'docs/superpowers/plans/demo.md',
+          previewText: '# Implementation Plan'
+        }
+      ]
+    },
     workflow: {
       visibleStage: {
         id: 'plan-ready',
@@ -164,12 +208,14 @@ test('switches finished artifact sessions into a dedicated completion mode', () 
 
   assert.strictEqual(view.mode, 'completion');
   assert(view.completion, 'expected completion payload');
-  assert.strictEqual(view.completion.bundlePath, '/api/sessions/session-complete/artifacts/current');
-  assert.strictEqual(view.completion.artifacts.length, 2);
+  assert.strictEqual(view.completion.recommendationTitle, 'Choose: Browser-first result surface');
+  assert.strictEqual(view.completion.exportPaths.markdownPath, '/api/sessions/session-complete/result.md');
+  assert.strictEqual(view.completion.sections.length, 2);
+  assert.strictEqual(view.completion.supportingArtifacts.length, 3);
   assert.strictEqual(view.newBrainstorm.visible, true);
   assert(view.canvasWorkspace, 'expected derived canvas workspace');
   assert.strictEqual(view.canvasWorkspace.anchorCard.kind, 'completion-cluster');
-  assert.strictEqual(view.canvasWorkspace.completionCluster.cards.length, 3);
+  assert.strictEqual(view.canvasWorkspace.completionCluster.cards.length, 5);
   assert(view.canvasWorkspace.supportingCards.some((card) => card.kind === 'recent-step'));
 });
 

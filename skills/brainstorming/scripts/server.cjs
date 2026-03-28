@@ -621,6 +621,27 @@ function handleApiRequest(req, res, pathname, requestUrl) {
     return;
   }
 
+  const resultMarkdownMatch = pathname.match(/^\/api\/sessions\/([^/]+)\/result\.md$/);
+  if (req.method === 'GET' && resultMarkdownMatch) {
+    try {
+      const resultMarkdown = webSessionManager.getFinishedResultMarkdown(resultMarkdownMatch[1]);
+      sendText(res, 200, resultMarkdown, 'text/markdown; charset=utf-8');
+    } catch (error) {
+      sendJson(res, 404, { error: error.message });
+    }
+    return;
+  }
+
+  const resultMatch = pathname.match(/^\/api\/sessions\/([^/]+)\/result$/);
+  if (req.method === 'GET' && resultMatch) {
+    try {
+      sendJson(res, 200, webSessionManager.getFinishedResult(resultMatch[1]));
+    } catch (error) {
+      sendJson(res, 404, { error: error.message });
+    }
+    return;
+  }
+
   const provenanceMatch = pathname.match(/^\/api\/sessions\/([^/]+)\/provenance$/);
   if (req.method === 'GET' && provenanceMatch) {
     try {

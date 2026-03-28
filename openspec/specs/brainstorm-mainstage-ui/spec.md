@@ -1,7 +1,7 @@
 # brainstorm-mainstage-ui Specification
 
 ## Purpose
-TBD - created by archiving change brainstorm-mainstage-product-v1. Update Purpose after archive.
+Define how the browser brainstorming workspace keeps the current active decision dominant while presenting history, review checkpoints, and finished results with clear visual hierarchy.
 ## Requirements
 ### Requirement: The browser mainstage SHALL keep the current active decision as the dominant focus
 The browser brainstorming product SHALL make the current active question or approval decision the dominant visual focus of the canvas workspace mainstage instead of giving equal weight to surrounding cards or panels.
@@ -26,13 +26,16 @@ The browser brainstorming product SHALL show only the most recent `2-3` complete
 - **THEN** the product reveals fuller session history through the canvas workspace without replacing the mainstage focus on the current active decision
 
 ### Requirement: The browser mainstage SHALL use a dedicated completion surface for the finished bundle
-The browser brainstorming product SHALL present the finished `spec + plan` bundle as a dedicated completion cluster inside the canvas workspace instead of treating it as one more side panel.
+The browser brainstorming product SHALL present the finished session as an outcome-first completion surface where the mature brainstorming deliverable is the primary visible cluster, while the generated `spec + plan` package remains supporting context rather than the only visible completion object.
 
 #### Scenario: Session reaches finished completion
-- **WHEN** the workflow completes with a final `spec + plan` bundle
-- **THEN** the workspace switches to a dedicated result presentation where the finished bundle and its primary artifacts are the main visible cluster
+- **WHEN** the workflow completes with a mature deliverable and supporting generated artifacts
+- **THEN** the workspace switches to a dedicated result presentation where the recommendation and finished deliverable sections are the main visible cluster
+
+#### Scenario: Supporting package is still available after completion
+- **WHEN** the user views a completed session
+- **THEN** the design spec, implementation plan, and result bundle remain visible as supporting package cards without replacing the finished-result surface as the primary focus
 
 #### Scenario: User starts another brainstorm after completion
 - **WHEN** the user wants to begin a new brainstorm while viewing a completed session
-- **THEN** the fresh-topic entry path remains clearly available inside the workspace without hiding or overwriting the completed bundle by default
-
+- **THEN** the fresh-topic entry path remains clearly available inside the workspace without hiding or overwriting the completed result by default

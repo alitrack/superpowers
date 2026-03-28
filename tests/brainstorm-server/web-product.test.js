@@ -45,6 +45,7 @@ async function request(method, route, payload) {
 
 function startServer() {
   return spawn('node', [SERVER_PATH], {
+    cwd: TEST_DIR,
     env: {
       ...process.env,
       BRAINSTORM_PORT: TEST_PORT,
@@ -106,6 +107,12 @@ async function runTests() {
       assert(res.body.includes('Only the latest 2-3 completed steps stay visible by default'));
       assert(res.body.includes('Open Full History'));
       assert(res.body.includes('completion-cluster-copy'));
+      assert(res.body.includes('completion-section-grid'));
+      assert(res.body.includes('completion-supporting-package'));
+      assert(res.body.includes('completion-export-markdown'));
+      assert(res.body.includes('completion-export-json'));
+      assert(res.body.includes('Export Markdown'));
+      assert(res.body.includes('Export JSON'));
       assert(!res.body.includes('Research Asset Workbench'));
       assert(!res.body.includes('V1 Governance Lens'));
       assert(!res.body.includes('Research Assets'));
@@ -259,30 +266,62 @@ async function runTests() {
     });
 
     await test('persists artifact-ready outputs and serves their content', async () => {
-      const session = JSON.parse((await request('POST', '/api/sessions')).body);
+      const session = JSON.parse((await request('POST', '/api/sessions', {
+        completionMode: 'artifact',
+        initialPrompt: 'We need a brainstorm result we can directly review and export.'
+      })).body);
 
       await request('POST', `/api/sessions/${session.id}/answers`, {
         type: 'answer',
-        questionId: 'root-goal',
+        questionId: 'seed-reframe',
         answerMode: 'option',
-        optionIds: ['host-ux'],
+        optionIds: ['fix-facilitation'],
         text: null,
         rawInput: '2'
       });
 
+      await request('POST', `/api/sessions/${session.id}/answers`, {
+        type: 'answer',
+        questionId: 'seed-directions',
+        answerMode: 'options',
+        optionIds: ['facilitation-engine', 'interaction-redesign'],
+        text: null,
+        rawInput: '1,2'
+      });
+
+      await request('POST', `/api/sessions/${session.id}/answers`, {
+        type: 'answer',
+        questionId: 'seed-criterion',
+        answerMode: 'option',
+        optionIds: ['clarity'],
+        text: null,
+        rawInput: '1'
+      });
+
       const completed = JSON.parse((await request('POST', `/api/sessions/${session.id}/answers`, {
         type: 'answer',
-        questionId: 'host-confirm',
-        answerMode: 'confirm',
-        optionIds: ['yes'],
+        questionId: 'seed-path',
+        answerMode: 'option',
+        optionIds: ['interaction-redesign'],
         text: null,
-        rawInput: 'yes'
+        rawInput: '2'
       })).body);
 
       assert.strictEqual(completed.currentMessage.type, 'artifact_ready');
       const artifactRes = await request('GET', `/api/sessions/${session.id}/artifacts/current`);
       assert.strictEqual(artifactRes.status, 200);
       assert(artifactRes.body.includes('Structured Brainstorming Result'));
+
+      const resultJsonRes = await request('GET', `/api/sessions/${session.id}/result`);
+      assert.strictEqual(resultJsonRes.status, 200);
+      const resultJson = JSON.parse(resultJsonRes.body);
+      assert(Array.isArray(resultJson.sections));
+      assert(resultJson.sections.some((section) => section.title === 'Recommendation'));
+
+      const resultMarkdownRes = await request('GET', `/api/sessions/${session.id}/result.md`);
+      assert.strictEqual(resultMarkdownRes.status, 200);
+      assert(resultMarkdownRes.body.includes('Structured Brainstorming Result'));
+      assert(resultMarkdownRes.body.includes('Recommendation'));
     });
 
     await test('exposes developer-facing provenance inspection without polluting the default app shell', async () => {
@@ -309,25 +348,44 @@ async function runTests() {
     await test('supports full-skill workflow sessions that pause for spec review before the final bundle', async () => {
       const session = JSON.parse((await request('POST', '/api/sessions', {
         completionMode: 'artifact',
-        workflowMode: 'full_skill'
+        workflowMode: 'full_skill',
+        initialPrompt: 'We need a browser-first brainstorm result surface with exports.'
       })).body);
 
       await request('POST', `/api/sessions/${session.id}/answers`, {
         type: 'answer',
-        questionId: 'root-goal',
+        questionId: 'seed-reframe',
         answerMode: 'option',
-        optionIds: ['host-ux'],
+        optionIds: ['fix-facilitation'],
         text: null,
         rawInput: '2'
       });
 
+      await request('POST', `/api/sessions/${session.id}/answers`, {
+        type: 'answer',
+        questionId: 'seed-directions',
+        answerMode: 'options',
+        optionIds: ['facilitation-engine', 'interaction-redesign'],
+        text: null,
+        rawInput: '1,2'
+      });
+
+      await request('POST', `/api/sessions/${session.id}/answers`, {
+        type: 'answer',
+        questionId: 'seed-criterion',
+        answerMode: 'option',
+        optionIds: ['clarity'],
+        text: null,
+        rawInput: '1'
+      });
+
       const reviewGate = JSON.parse((await request('POST', `/api/sessions/${session.id}/answers`, {
         type: 'answer',
-        questionId: 'host-confirm',
-        answerMode: 'confirm',
-        optionIds: ['yes'],
+        questionId: 'seed-path',
+        answerMode: 'option',
+        optionIds: ['interaction-redesign'],
         text: null,
-        rawInput: 'yes'
+        rawInput: '2'
       })).body);
 
       assert.strictEqual(reviewGate.workflow.mode, 'full_skill');
@@ -348,11 +406,27 @@ async function runTests() {
       assert.strictEqual(completed.currentMessage.type, 'artifact_ready');
       assert.strictEqual(completed.workflow.visibleStage.id, 'plan-ready');
       assert(completed.workflow.planArtifact);
+      assert(completed.currentMessage.resultExportPaths);
+      assert.strictEqual(completed.currentMessage.resultExportPaths.jsonPath, `/api/sessions/${session.id}/result`);
+      assert(completed.currentMessage.finishedResult);
+      assert.strictEqual(completed.currentMessage.finishedResult.supportingArtifacts.length, 3);
 
       const artifactRes = await request('GET', `/api/sessions/${session.id}/artifacts/current`);
       assert.strictEqual(artifactRes.status, 200);
       assert(artifactRes.body.includes('Spec and Plan Bundle'));
       assert(artifactRes.body.includes('Implementation Plan'));
+
+      const resultJsonRes = await request('GET', `/api/sessions/${session.id}/result`);
+      assert.strictEqual(resultJsonRes.status, 200);
+      const resultJson = JSON.parse(resultJsonRes.body);
+      assert.strictEqual(resultJson.supportingArtifacts.length, 3);
+      assert(resultJson.sections.some((section) => section.title === 'Recommendation'));
+
+      const resultMarkdownRes = await request('GET', `/api/sessions/${session.id}/result.md`);
+      assert.strictEqual(resultMarkdownRes.status, 200);
+      assert(resultMarkdownRes.body.includes('Structured Brainstorming Result'));
+      assert(resultMarkdownRes.body.includes('Recommendation'));
+      assert(!resultMarkdownRes.body.includes('Spec and Plan Bundle'));
     });
 
     await test('exposes workflow inspection details only through the developer inspection API', async () => {

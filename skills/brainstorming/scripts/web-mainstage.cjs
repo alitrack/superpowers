@@ -12,6 +12,13 @@
     return entries.slice(Math.max(0, entries.length - count));
   }
 
+  function slugify(value) {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'result';
+  }
+
   function buildHistoryModel(session, options) {
     const history = Array.isArray(session && session.history) ? session.history : [];
     const expanded = Boolean(options && options.historyExpanded);
@@ -46,6 +53,19 @@
     );
   }
 
+  function getFinishedResult(session) {
+    if (session && session.finishedResult && typeof session.finishedResult === 'object') {
+      return session.finishedResult;
+    }
+    const message = session && session.currentMessage && typeof session.currentMessage === 'object'
+      ? session.currentMessage
+      : null;
+    if (message && message.finishedResult && typeof message.finishedResult === 'object') {
+      return message.finishedResult;
+    }
+    return null;
+  }
+
   function buildCurrentDecision(session, mode) {
     const message = session && session.currentMessage && typeof session.currentMessage === 'object'
       ? session.currentMessage
@@ -56,20 +76,32 @@
     const stage = workflow.visibleStage && typeof workflow.visibleStage === 'object'
       ? workflow.visibleStage
       : null;
+    const finishedResult = getFinishedResult(session);
 
     if (mode === 'completion') {
       return {
-        label: 'Finished Bundle',
-        title: message.title || (stage && stage.title) || 'Spec and plan are ready',
-        description: message.text || (stage && stage.description) || 'The workflow finished with a reviewable bundle.'
+        label: 'Finished Result',
+        title: (finishedResult && finishedResult.recommendationTitle)
+          || message.title
+          || (stage && stage.title)
+          || 'Finished result',
+        description: (finishedResult && finishedResult.recommendationSummary)
+          || message.text
+          || (stage && stage.description)
+          || 'The workflow finished with a reviewable result.'
       };
     }
 
     if (mode === 'summary') {
       return {
-        label: 'Session Summary',
-        title: message.title || 'Summary ready',
-        description: message.text || (stage && stage.description) || 'This session has already converged to a summary.'
+        label: 'Finished Result',
+        title: (finishedResult && finishedResult.recommendationTitle)
+          || message.title
+          || 'Summary ready',
+        description: (finishedResult && finishedResult.recommendationSummary)
+          || message.text
+          || (stage && stage.description)
+          || 'This session has already converged to a mature result.'
       };
     }
 
@@ -112,34 +144,32 @@
     const message = session && session.currentMessage && typeof session.currentMessage === 'object'
       ? session.currentMessage
       : {};
-    const workflow = session && session.workflow && typeof session.workflow === 'object'
-      ? session.workflow
-      : {};
-    const artifacts = [];
+    const finishedResult = getFinishedResult(session);
 
-    if (workflow.specArtifact) {
-      artifacts.push({
-        kind: 'spec',
-        title: workflow.specArtifact.title,
-        relativePath: workflow.specArtifact.relativePath,
-        previewText: workflow.specArtifact.previewText || ''
-      });
-    }
-    if (workflow.planArtifact) {
-      artifacts.push({
-        kind: 'plan',
-        title: workflow.planArtifact.title,
-        relativePath: workflow.planArtifact.relativePath,
-        previewText: workflow.planArtifact.previewText || ''
-      });
+    if (finishedResult) {
+      return {
+        title: finishedResult.title || message.title || 'Finished result',
+        description: message.text || finishedResult.recommendationSummary || 'The session converged to a finished result.',
+        recommendationTitle: finishedResult.recommendationTitle || finishedResult.title || message.title || 'Finished result',
+        recommendationSummary: finishedResult.recommendationSummary || message.text || '',
+        exportPaths: finishedResult.exportPaths || null,
+        sections: Array.isArray(finishedResult.sections) ? finishedResult.sections : [],
+        supportingArtifacts: Array.isArray(finishedResult.supportingArtifacts) ? finishedResult.supportingArtifacts : [],
+        bundlePath: message.path || null,
+        artifactType: message.artifactType || null
+      };
     }
 
     return {
       title: message.title || 'Spec and plan are ready',
       description: message.text || 'The workflow finished with a reviewable design spec and implementation plan.',
+      recommendationTitle: message.title || 'Spec and plan are ready',
+      recommendationSummary: message.text || 'The workflow finished with a reviewable design spec and implementation plan.',
+      exportPaths: null,
+      sections: [],
+      supportingArtifacts: [],
       bundlePath: message.path || null,
-      artifactType: message.artifactType || null,
-      artifacts
+      artifactType: message.artifactType || null
     };
   }
 
@@ -233,22 +263,25 @@
       ? {
           title: completion.title,
           description: completion.description,
-          cards: [
-            createSupportingCard(
-              'completion-bundle',
-              'result-bundle',
-              'Result bundle',
-              completion.description,
-              { badge: 'Bundle', previewText: completion.bundlePath || '' }
-            )
-          ].concat(completion.artifacts.map((artifact) => createSupportingCard(
-            `artifact-${artifact.kind}`,
-            artifact.kind === 'spec' ? 'design-spec' : 'implementation-plan',
-            artifact.title || artifact.kind,
-            artifact.previewText || '',
+          cards: completion.sections.map((section) => createSupportingCard(
+            `section-${section.id || slugify(section.title || 'result')}`,
+            'result-section',
+            section.title || 'Section',
+            Array.isArray(section.items) ? section.items.join('\n') : '',
             {
-              badge: artifact.kind === 'spec' ? 'Spec' : 'Plan',
-              previewText: artifact.relativePath || artifact.previewText || ''
+              badge: 'Result',
+              previewText: Array.isArray(section.items) ? section.items.join('\n') : ''
+            }
+          )).concat(completion.supportingArtifacts.map((artifact) => createSupportingCard(
+            `artifact-${artifact.kind}`,
+            artifact.kind === 'bundle'
+              ? 'result-bundle'
+              : (artifact.kind === 'spec' ? 'design-spec' : 'implementation-plan'),
+            artifact.title || artifact.label || artifact.kind,
+            artifact.previewText || artifact.path || '',
+            {
+              badge: artifact.label || (artifact.kind === 'spec' ? 'Spec' : artifact.kind === 'plan' ? 'Plan' : 'Bundle'),
+              previewText: artifact.path || artifact.previewText || ''
             }
           )))
         }
@@ -313,7 +346,9 @@
     const currentDecision = buildCurrentDecision(session, mode);
     const history = buildHistoryModel(session, options);
     const supportingArtifact = mode === 'review' ? pickSupportingArtifact(session) : null;
-    const completion = mode === 'completion' ? buildCompletionPayload(session) : null;
+    const completion = mode === 'completion' || mode === 'summary'
+      ? buildCompletionPayload(session)
+      : null;
 
     return {
       mode,

@@ -679,15 +679,33 @@ async function runTests() {
     assert(approved.workflow.planArtifact);
     assert(fs.existsSync(approved.workflow.planArtifact.filePath), 'plan artifact should be written to disk');
     assert(approved.artifact, 'bundle artifact metadata should be persisted');
+    assert(approved.finishedResult, 'finished result snapshot should be persisted');
+    assert.strictEqual(approved.finishedResult.exportPaths.jsonPath, `/api/sessions/${approved.id}/result`);
+    assert.strictEqual(approved.finishedResult.exportPaths.markdownPath, `/api/sessions/${approved.id}/result.md`);
+    assert.strictEqual(approved.finishedResult.sections[0].title, 'Recommendation');
+    assert.strictEqual(approved.finishedResult.supportingArtifacts.length, 3);
+    assert(approved.currentMessage.deliverable, 'artifact_ready payload should carry normalized deliverable');
+    assert(approved.currentMessage.finishedResult, 'artifact_ready payload should expose finished result snapshot');
+    assert.strictEqual(approved.currentMessage.resultExportPaths.jsonPath, `/api/sessions/${approved.id}/result`);
 
     const bundleText = fs.readFileSync(approved.artifact.filePath, 'utf-8');
     assert(bundleText.includes('Spec and Plan Bundle'));
     assert(bundleText.includes('Brainstorm Workflow Design'));
     assert(bundleText.includes('Brainstorm Workflow Implementation Plan'));
 
+    const finishedResult = manager.getFinishedResult(session.id);
+    assert.strictEqual(finishedResult.recommendationTitle, 'Choose: Guided workflow');
+    assert(finishedResult.sections.some((section) => section.title === 'Next Actions'));
+
+    const finishedMarkdown = manager.getFinishedResultMarkdown(session.id);
+    assert(finishedMarkdown.includes('Structured Brainstorming Result'));
+    assert(finishedMarkdown.includes('Choose: Guided workflow'));
+    assert(!finishedMarkdown.includes('Spec and Plan Bundle'));
+
     const reloaded = manager.getSession(session.id);
     assert.strictEqual(reloaded.workflow.status, 'complete');
     assert.strictEqual(reloaded.currentMessage.type, 'artifact_ready');
+    assert(reloaded.finishedResult, 'finished result snapshot should survive reload');
   });
 
   await test('retries hidden spec review automatically before surfacing the user review gate', async (tmpDir) => {

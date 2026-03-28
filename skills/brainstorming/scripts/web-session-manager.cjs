@@ -654,6 +654,156 @@ function buildArtifactMarkdown(session, summary) {
   return lines.join('\n');
 }
 
+function getFinishedResultSource(session) {
+  if (session && session.summary && typeof session.summary === 'object') {
+    return session.summary;
+  }
+  const message = session && session.currentMessage && typeof session.currentMessage === 'object'
+    ? session.currentMessage
+    : null;
+  if (message && (message.type === 'summary' || message.type === 'artifact_ready')) {
+    return message;
+  }
+  return null;
+}
+
+function normalizeFinishedResultSections(source) {
+  const deliverable = source && source.deliverable && typeof source.deliverable === 'object'
+    ? source.deliverable
+    : null;
+  const sections = Array.isArray(deliverable && deliverable.sections)
+    ? deliverable.sections
+    : [];
+
+  if (sections.length > 0) {
+    return sections.map((section, index) => ({
+      id: section.id || slugify(section.title || `section-${index + 1}`),
+      title: section.title || `Section ${index + 1}`,
+      items: Array.isArray(section.items) ? section.items.filter(Boolean) : []
+    }));
+  }
+
+  if (source && typeof source.text === 'string' && source.text.trim()) {
+    return [{
+      id: 'summary',
+      title: 'Summary',
+      items: [source.text.trim()]
+    }];
+  }
+
+  return [];
+}
+
+function findFinishedSection(sections, title) {
+  return sections.find((section) => section.title === title) || null;
+}
+
+function firstFinishedItem(section) {
+  return section && Array.isArray(section.items) && section.items.length > 0
+    ? section.items[0]
+    : null;
+}
+
+function buildFinishedResultSupportingArtifacts(session) {
+  const workflow = ensureWorkflow(session);
+  const artifacts = [];
+
+  if (session.artifact && session.artifact.path) {
+    artifacts.push({
+      kind: 'bundle',
+      label: session.artifact.artifactType === 'workflow_bundle' ? 'Result Bundle' : 'Current Artifact',
+      title: session.artifact.title,
+      path: session.artifact.path,
+      previewText: session.artifact.previewText || session.artifact.text || ''
+    });
+  }
+
+  if (workflow.specArtifact) {
+    artifacts.push({
+      kind: 'spec',
+      label: 'Design Spec',
+      title: workflow.specArtifact.title,
+      path: workflow.specArtifact.relativePath,
+      previewText: workflow.specArtifact.previewText || ''
+    });
+  }
+
+  if (workflow.planArtifact) {
+    artifacts.push({
+      kind: 'plan',
+      label: 'Implementation Plan',
+      title: workflow.planArtifact.title,
+      path: workflow.planArtifact.relativePath,
+      previewText: workflow.planArtifact.previewText || ''
+    });
+  }
+
+  return artifacts;
+}
+
+function buildFinishedResultSnapshot(session) {
+  const source = getFinishedResultSource(session);
+  if (!source) {
+    return null;
+  }
+
+  const deliverable = source.deliverable && typeof source.deliverable === 'object'
+    ? clone(source.deliverable)
+    : null;
+  const synthesis = source.synthesis && typeof source.synthesis === 'object'
+    ? clone(source.synthesis)
+    : (deliverable && deliverable.synthesis && typeof deliverable.synthesis === 'object'
+      ? clone(deliverable.synthesis)
+      : null);
+  const sections = normalizeFinishedResultSections(source);
+
+  if (sections.length === 0) {
+    return null;
+  }
+
+  const recommendation = firstFinishedItem(findFinishedSection(sections, 'Recommendation'))
+    || (synthesis && synthesis.recommendation ? `Choose: ${synthesis.recommendation}` : null)
+    || source.title
+    || 'Finished result';
+  const rationale = firstFinishedItem(findFinishedSection(sections, 'Why This Path Currently Wins'))
+    || firstFinishedItem(findFinishedSection(sections, 'Problem Framing'))
+    || (typeof source.text === 'string' ? source.text.trim() : '');
+
+  return {
+    title: source.title || (deliverable && deliverable.title) || recommendation || 'Finished result',
+    recommendationTitle: recommendation,
+    recommendationSummary: rationale,
+    sections,
+    deliverable,
+    synthesis,
+    exportPaths: {
+      jsonPath: `/api/sessions/${session.id}/result`,
+      markdownPath: `/api/sessions/${session.id}/result.md`
+    },
+    supportingArtifacts: buildFinishedResultSupportingArtifacts(session)
+  };
+}
+
+function syncFinishedResult(session) {
+  const finishedResult = buildFinishedResultSnapshot(session);
+  session.finishedResult = finishedResult ? clone(finishedResult) : null;
+
+  if (!session.currentMessage || !session.finishedResult) {
+    return;
+  }
+
+  if (session.currentMessage.type === 'summary' || session.currentMessage.type === 'artifact_ready') {
+    session.currentMessage.finishedResult = clone(session.finishedResult);
+    session.currentMessage.resultExportPaths = clone(session.finishedResult.exportPaths);
+    if (session.finishedResult.deliverable) {
+      session.currentMessage.deliverable = clone(session.finishedResult.deliverable);
+    }
+    if (session.finishedResult.synthesis) {
+      session.currentMessage.synthesis = clone(session.finishedResult.synthesis);
+    }
+  }
+}
+
 function createSessionManager(options) {
   const dataDir = options.dataDir;
   const sessionsDir = path.join(dataDir, 'sessions');
@@ -679,6 +829,7 @@ function createSessionManager(options) {
   }
 
   function persistSession(session) {
+    syncFinishedResult(session);
     refreshWorkflowChecklist(session);
     fs.writeFileSync(sessionFile(session.id), JSON.stringify(session, null, 2) + '\n');
   }
@@ -1051,7 +1202,9 @@ function createSessionManager(options) {
         'Review the result sheet and confirm the generated package matches your intent.',
         'Read the generated design spec and implementation plan before deciding whether to revise or implement.',
         'If you want a different direction, start a new brainstorming round from the composer at the top.'
-      ]
+      ],
+      deliverable: session.summary && session.summary.deliverable ? clone(session.summary.deliverable) : null,
+      synthesis: session.summary && session.summary.synthesis ? clone(session.summary.synthesis) : null
     };
     refreshWorkflowChecklist(session);
   }
@@ -1223,6 +1376,24 @@ function createSessionManager(options) {
 
   function getSession(sessionId) {
     return clone(loadSession(sessionId));
+  }
+
+  function getFinishedResult(sessionId) {
+    const session = loadSession(sessionId);
+    syncFinishedResult(session);
+    if (!session.finishedResult) {
+      throw new Error(`No finished result for session: ${sessionId}`);
+    }
+    return clone(session.finishedResult);
+  }
+
+  function getFinishedResultMarkdown(sessionId) {
+    const session = loadSession(sessionId);
+    const source = getFinishedResultSource(session);
+    if (!source) {
+      throw new Error(`No finished result for session: ${sessionId}`);
+    }
+    return buildArtifactMarkdown(session, source);
   }
 
   function getSessionProvenance(sessionId) {
@@ -2392,6 +2563,8 @@ function createSessionManager(options) {
     createSession,
     listSessions,
     getSession,
+    getFinishedResult,
+    getFinishedResultMarkdown,
     getSessionInspection,
     getSessionProvenance,
     submitAnswer,
