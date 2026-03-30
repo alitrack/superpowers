@@ -9,8 +9,10 @@ const FIXTURE_PATH = path.join(__dirname, 'fixtures/mock-codex-exec.cjs');
 let runCodexExec;
 let buildDefaultExecArgs;
 let runCodexExecWithSchema;
+let normalizeSchemaForCodex;
+let buildRuntimeOutputSchema;
 try {
-  ({ runCodexExec, runCodexExecWithSchema, buildDefaultExecArgs } = require(RUNNER_PATH));
+  ({ runCodexExec, runCodexExecWithSchema, buildDefaultExecArgs, normalizeSchemaForCodex, buildRuntimeOutputSchema } = require(RUNNER_PATH));
 } catch (error) {
   console.error(`Cannot load ${RUNNER_PATH}: ${error.message}`);
   process.exit(1);
@@ -95,6 +97,46 @@ async function runTests() {
     assert.strictEqual(result.threadId, 'thread-exec-mock');
     assert.strictEqual(typeof result.agentText, 'string');
     assert(result.agentText.includes('"type":"question"'));
+  });
+
+  await test('normalizes object schemas for codex output-schema compatibility', async () => {
+    const normalized = normalizeSchemaForCodex({
+      type: 'object',
+      required: ['outer'],
+      properties: {
+        outer: {
+          type: 'object',
+          required: ['value'],
+          properties: {
+            value: { const: 'fixed' },
+            description: { type: 'string' }
+          }
+        }
+      }
+    });
+
+    assert.strictEqual(normalized.additionalProperties, false);
+    assert.deepStrictEqual(normalized.required, ['outer']);
+    assert.strictEqual(normalized.properties.outer.additionalProperties, false);
+    assert.deepStrictEqual(normalized.properties.outer.required, ['value', 'description']);
+    assert.strictEqual(normalized.properties.outer.properties.value.type, 'string');
+  });
+
+  await test('builds a codex-compatible runtime schema without top-level anyOf', async () => {
+    const schema = buildRuntimeOutputSchema();
+
+    assert.strictEqual(schema.type, 'object');
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(schema, 'anyOf'), false);
+    assert.deepStrictEqual(schema.required, [
+      'type',
+      'questionType',
+      'questionId',
+      'title',
+      'description',
+      'options',
+      'allowTextOverride',
+      'textOverrideLabel'
+    ]);
   });
 
   console.log(`\n--- Results: ${passed} passed, ${failed} failed ---`);

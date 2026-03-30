@@ -14,69 +14,42 @@ const DEFAULT_DISABLED_FEATURES = Object.freeze([
   'memories'
 ]);
 
-const STRUCTURED_OUTPUT_SCHEMA = {
-  type: 'object',
-  required: ['type'],
-  anyOf: [
-    {
-      type: 'object',
-      required: ['type', 'questionType', 'questionId', 'title'],
-      properties: {
-        type: { const: 'question' },
-        questionType: { enum: ['pick_one', 'pick_many', 'confirm', 'ask_text'] },
-        questionId: { type: 'string' },
-        title: { type: 'string' },
-        description: { type: 'string' },
-        options: {
-          type: 'array',
-          items: {
-            type: 'object',
-            required: ['id', 'label'],
-            properties: {
-              id: { type: 'string' },
-              label: { type: 'string' },
-              description: { type: 'string' }
-            }
-          }
-        },
-        allowTextOverride: { type: 'boolean' },
-        textOverrideLabel: { type: 'string' }
-      }
-    },
-    {
-      type: 'object',
-      required: ['type', 'text'],
-      properties: {
-        type: { const: 'summary' },
-        text: { type: 'string' },
-        path: { type: 'array', items: { type: 'string' } },
-        answers: {
-          type: 'array',
-          items: {
-            type: 'object',
-            required: ['questionId', 'answer'],
-            properties: {
-              questionId: { type: 'string' },
-              answer: { type: 'string' }
-            }
+function buildRuntimeOutputSchema() {
+  return {
+    type: 'object',
+    required: [
+      'type',
+      'questionType',
+      'questionId',
+      'title',
+      'description',
+      'options',
+      'allowTextOverride',
+      'textOverrideLabel'
+    ],
+    properties: {
+      type: { const: 'question' },
+      questionType: { enum: ['pick_one', 'pick_many', 'confirm', 'ask_text'] },
+      questionId: { type: 'string' },
+      title: { type: 'string' },
+      description: { type: 'string' },
+      options: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['id', 'label', 'description'],
+          properties: {
+            id: { type: 'string' },
+            label: { type: 'string' },
+            description: { type: 'string' }
           }
         }
-      }
-    },
-    {
-      type: 'object',
-      required: ['type', 'artifactType', 'title', 'text'],
-      properties: {
-        type: { const: 'artifact_ready' },
-        artifactType: { type: 'string' },
-        title: { type: 'string' },
-        text: { type: 'string' },
-        path: { type: 'string' },
-        artifactMarkdown: { type: 'string' }
-      }
+      },
+      allowTextOverride: { type: 'boolean' },
+      textOverrideLabel: { type: 'string' }
     }
-  ]
-};
+  };
+}
 
 function readOption(options, key) {
   if (options && Object.prototype.hasOwnProperty.call(options, key)) {
@@ -150,10 +123,79 @@ function shouldDisableExperimentalFeatures(options) {
   return envValue !== '0' && envValue.toLowerCase() !== 'false';
 }
 
+function inferJsonSchemaTypeFromConst(value) {
+  if (value === null) {
+    return 'null';
+  }
+  if (typeof value === 'string') {
+    return 'string';
+  }
+  if (typeof value === 'boolean') {
+    return 'boolean';
+  }
+  if (typeof value === 'number') {
+    return Number.isInteger(value) ? 'integer' : 'number';
+  }
+  return undefined;
+}
+
+function normalizeSchemaForCodex(schemaObject) {
+  if (Array.isArray(schemaObject)) {
+    return schemaObject.map((item) => normalizeSchemaForCodex(item));
+  }
+
+  if (!schemaObject || typeof schemaObject !== 'object') {
+    return schemaObject;
+  }
+
+  const normalized = {};
+  for (const [key, value] of Object.entries(schemaObject)) {
+    if (key === 'properties' && value && typeof value === 'object' && !Array.isArray(value)) {
+      normalized.properties = Object.fromEntries(
+        Object.entries(value).map(([propKey, propValue]) => [propKey, normalizeSchemaForCodex(propValue)])
+      );
+      continue;
+    }
+
+    if (key === 'items') {
+      normalized.items = normalizeSchemaForCodex(value);
+      continue;
+    }
+
+    if (key === 'anyOf' || key === 'oneOf' || key === 'allOf') {
+      normalized[key] = Array.isArray(value) ? value.map((item) => normalizeSchemaForCodex(item)) : value;
+      continue;
+    }
+
+    normalized[key] = normalizeSchemaForCodex(value);
+  }
+
+  if (normalized.type === 'object' && !Object.prototype.hasOwnProperty.call(normalized, 'additionalProperties')) {
+    normalized.additionalProperties = false;
+  }
+
+  if (normalized.type === 'object' && normalized.properties && typeof normalized.properties === 'object') {
+    const propertyKeys = Object.keys(normalized.properties);
+    const existingRequired = Array.isArray(normalized.required) ? normalized.required : [];
+    normalized.required = existingRequired
+      .filter((key) => propertyKeys.includes(key))
+      .concat(propertyKeys.filter((key) => !existingRequired.includes(key)));
+  }
+
+  if (!normalized.type && Object.prototype.hasOwnProperty.call(normalized, 'const')) {
+    const inferredType = inferJsonSchemaTypeFromConst(normalized.const);
+    if (inferredType) {
+      normalized.type = inferredType;
+    }
+  }
+
+  return normalized;
+}
+
 function createSchemaFile(schemaObject) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainstorm-codex-schema-'));
   const filePath = path.join(dir, 'structured-output-schema.json');
-  fs.writeFileSync(filePath, JSON.stringify(schemaObject, null, 2));
+  fs.writeFileSync(filePath, JSON.stringify(normalizeSchemaForCodex(schemaObject), null, 2));
   return { dir, filePath };
 }
 
@@ -289,11 +331,13 @@ function runCodexExecWithSchema(prompt, schemaObject, options) {
 }
 
 function runCodexExec(prompt, options) {
-  return runCodexExecWithSchema(prompt, STRUCTURED_OUTPUT_SCHEMA, options);
+  return runCodexExecWithSchema(prompt, buildRuntimeOutputSchema(), options);
 }
 
 module.exports = {
   buildDefaultExecArgs,
+  buildRuntimeOutputSchema,
+  normalizeSchemaForCodex,
   runCodexExec,
   runCodexExecWithSchema
 };
