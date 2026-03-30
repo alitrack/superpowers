@@ -94,25 +94,31 @@ async function runTests() {
     await test('serves the brainstorming canvas workspace shell at /app', async () => {
       const res = await request('GET', '/app');
       assert.strictEqual(res.status, 200);
-      assert(res.body.includes('brainstorm-canvas-workspace'));
-      assert(res.body.includes('canvas-anchor-card'));
-      assert(res.body.includes('canvas-supporting-cards'));
+      assert(res.body.includes('brainstorm-workbench'));
+      assert(res.body.includes('decision-tree-panel'));
+      assert(res.body.includes('active-stage-panel'));
+      assert(res.body.includes('context-panel'));
       assert(res.body.includes('workspace-mode-toggle'));
-      assert(res.body.includes('canvas-inspector'));
+      assert(res.body.includes('workflow-stage-strip'));
+      assert(res.body.includes('selected-node-panel'));
+      assert(res.body.includes('supporting-package-panel'));
       assert(res.body.includes('history-toggle-button'));
-      assert(res.body.includes('Current Decision'));
-      assert(res.body.includes('Start A New Brainstorm'));
+      assert(res.body.includes('Active Node'));
+      assert(res.body.includes('Decision Tree'));
+      assert(res.body.includes('Start Another Topic'));
       assert(res.body.includes('Focused View'));
       assert(res.body.includes('Overview'));
-      assert(res.body.includes('Only the latest 2-3 completed steps stay visible by default'));
+      assert(res.body.includes('Keep one active node in focus while the branch path stays visible'));
       assert(res.body.includes('Open Full History'));
-      assert(res.body.includes('completion-cluster-copy'));
+      assert(res.body.includes('finished-result-panel'));
       assert(res.body.includes('completion-section-grid'));
       assert(res.body.includes('completion-supporting-package'));
       assert(res.body.includes('completion-export-markdown'));
       assert(res.body.includes('completion-export-json'));
       assert(res.body.includes('Export Markdown'));
       assert(res.body.includes('Export JSON'));
+      assert(!res.body.includes('canvas-anchor-card'));
+      assert(!res.body.includes('new-brainstorm-card'));
       assert(!res.body.includes('Research Asset Workbench'));
       assert(!res.body.includes('V1 Governance Lens'));
       assert(!res.body.includes('Research Assets'));
@@ -215,9 +221,9 @@ async function runTests() {
 
       const res = await request('GET', '/app');
       assert.strictEqual(res.status, 200);
-      assert(res.body.includes('Start A New Brainstorm'));
+      assert(res.body.includes('Start Another Topic'));
       assert(res.body.includes('persistent-seed-input'));
-      assert(res.body.includes('persistent-start-summary'));
+      assert(res.body.includes('new-brainstorm-dock'));
     });
 
     await test('advances only the targeted session', async () => {

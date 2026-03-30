@@ -51,9 +51,13 @@ test('classifies active sessions into question mode and keeps the current decisi
   assert.strictEqual(view.newBrainstorm.visible, true);
   assert(view.canvasWorkspace, 'expected derived canvas workspace');
   assert.strictEqual(view.canvasWorkspace.mode, 'focused');
-  assert.strictEqual(view.canvasWorkspace.anchorCard.kind, 'active-decision');
-  assert.strictEqual(view.canvasWorkspace.anchorCard.questionId, 'seed-path');
-  assert.strictEqual(view.canvasWorkspace.supportingCards.length, 2);
+  assert(view.canvasWorkspace.decisionTree, 'expected decision tree model');
+  assert.strictEqual(view.canvasWorkspace.activeStage.kind, 'active-decision');
+  assert.strictEqual(view.canvasWorkspace.activeStage.questionId, 'seed-path');
+  assert.strictEqual(view.canvasWorkspace.decisionTree.pathNodes.at(-1).id, 'active-seed-path');
+  assert.strictEqual(view.canvasWorkspace.decisionTree.pathNodes.at(-1).isActive, true);
+  assert.strictEqual(view.canvasWorkspace.decisionTree.hiddenCount, 0);
+  assert(view.canvasWorkspace.contextPanel, 'expected context panel');
   assert(view.canvasWorkspace.dock.hasNewBrainstormEntry);
 });
 
@@ -87,12 +91,9 @@ test('classifies spec approval checkpoints into review mode and exposes the draf
   assert.strictEqual(view.history.visibleEntries.length, 3);
   assert.strictEqual(view.history.hiddenCount, 1);
   assert(view.canvasWorkspace, 'expected derived canvas workspace');
-  assert.strictEqual(view.canvasWorkspace.anchorCard.kind, 'review-decision');
-  assert(view.canvasWorkspace.supportingCards.some((card) => card.kind === 'review-draft'));
-  assert.strictEqual(
-    view.canvasWorkspace.supportingCards.filter((card) => card.isAnswerable).length,
-    0
-  );
+  assert.strictEqual(view.canvasWorkspace.activeStage.kind, 'review-decision');
+  assert(view.canvasWorkspace.decisionTree.contextNodes.some((node) => node.kind === 'review-draft'));
+  assert(view.canvasWorkspace.contextPanel.sections.some((section) => section.kind === 'selected-node'));
 });
 
 test('caps recent context at three steps by default but reveals the full history on demand', () => {
@@ -127,8 +128,37 @@ test('caps recent context at three steps by default but reveals the full history
   assert.strictEqual(expanded.history.expanded, true);
   assert.strictEqual(collapsed.canvasWorkspace.mode, 'focused');
   assert.strictEqual(expanded.canvasWorkspace.mode, 'overview');
-  assert.strictEqual(collapsed.canvasWorkspace.supportingCards.length, 3);
-  assert.strictEqual(expanded.canvasWorkspace.supportingCards.length, 5);
+  assert.strictEqual(collapsed.canvasWorkspace.decisionTree.hiddenCount, 2);
+  assert.strictEqual(expanded.canvasWorkspace.decisionTree.hiddenCount, 0);
+  assert(expanded.canvasWorkspace.decisionTree.pathNodes.length > collapsed.canvasWorkspace.decisionTree.pathNodes.length);
+});
+
+test('selecting a path node shows that node in the context panel', () => {
+  const view = deriveMainstageView({
+    id: 'session-path-selection',
+    seedPrompt: 'How should the product stop feeling like a form?',
+    history: buildHistory(3),
+    currentMessage: {
+      type: 'question',
+      questionId: 'seed-path',
+      title: 'Which path should become the working direction?',
+      description: 'Choose one path so the draft can converge.'
+    },
+    workflow: {
+      visibleStage: {
+        id: 'confirm-design',
+        title: 'Confirm the direction',
+        description: 'Choose the path that should become the working direction.'
+      }
+    }
+  }, {
+    inspectedCardId: 'history-q-2'
+  });
+
+  assert.strictEqual(view.canvasWorkspace.contextPanel.selectedNodeId, 'history-q-2');
+  assert(view.canvasWorkspace.contextPanel.selectedNode, 'expected selected node');
+  assert.strictEqual(view.canvasWorkspace.contextPanel.selectedNode.title, 'Question 2');
+  assert.strictEqual(view.canvasWorkspace.contextPanel.selectedNode.body, 'Answer 2');
 });
 
 test('switches finished artifact sessions into a dedicated completion mode', () => {
@@ -214,9 +244,10 @@ test('switches finished artifact sessions into a dedicated completion mode', () 
   assert.strictEqual(view.completion.supportingArtifacts.length, 3);
   assert.strictEqual(view.newBrainstorm.visible, true);
   assert(view.canvasWorkspace, 'expected derived canvas workspace');
-  assert.strictEqual(view.canvasWorkspace.anchorCard.kind, 'completion-cluster');
-  assert.strictEqual(view.canvasWorkspace.completionCluster.cards.length, 5);
-  assert(view.canvasWorkspace.supportingCards.some((card) => card.kind === 'recent-step'));
+  assert.strictEqual(view.canvasWorkspace.activeStage.kind, 'completion-cluster');
+  assert(view.canvasWorkspace.decisionTree.resultNodes.length >= 1);
+  assert.strictEqual(view.canvasWorkspace.contextPanel.packageItems.length, 3);
+  assert(view.canvasWorkspace.contextPanel.sections.some((section) => section.kind === 'result-section'));
 });
 
 if (process.exitCode) {

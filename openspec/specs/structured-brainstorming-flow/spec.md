@@ -4,19 +4,19 @@
 TBD - created by archiving change structured-brainstorming. Update Purpose after archive.
 ## Requirements
 ### Requirement: Hosts present one active answerable question at a time
-The system MUST expose exactly one active answerable user decision at a time, and the host SHALL present that decision as the dominant anchor element in the canvas workspace while limiting default visible supporting history to lightweight recent context.
+The system MUST expose exactly one active answerable user decision at a time, and the host SHALL present that decision as the dominant active node inside a workbench that also exposes the surrounding branch path, checkpoints, and nearby context without turning them into competing answerable questions.
 
 #### Scenario: Current active decision is visible
 - **WHEN** a session is waiting for the user to answer a question or approval prompt
-- **THEN** the host renders that single decision as the dominant anchor card and does not give equal visual weight to unrelated workspace cards
+- **THEN** the host renders that single decision as the dominant active node and highlights its position within the surrounding branch path
 
 #### Scenario: Prior answers exist
 - **WHEN** earlier steps have already been completed
-- **THEN** the host may show recent supporting context for only the most recent `2-3` steps as supporting workspace cards by default while keeping the current active decision primary
+- **THEN** the host may show the current path, checkpoint markers, and only lightweight nearby context by default while keeping the current active decision primary
 
 #### Scenario: Full history is requested
 - **WHEN** the user explicitly asks to review the full prior thread
-- **THEN** the host reveals the broader history through the canvas workspace without replacing the current anchor focus unless the session is already complete
+- **THEN** the host reveals the broader branch structure through the workbench without replacing the current active-node focus unless the session is already complete
 
 ### Requirement: Backend controls question sequencing and branching
 The system SHALL let the backend decide which user-facing question, hidden automation step, review checkpoint, or completion state comes next so workflow behavior stays consistent across hosts and is not hardcoded into individual renderers.
@@ -52,13 +52,13 @@ The system MUST conclude V1 with a structured completion state that exposes a re
 - **THEN** the host presents the current reviewable state together with one active request for user guidance
 
 ### Requirement: Hosts present workflow progress in non-technical language
-The system MUST present workflow stages to default users without requiring them to understand git, skills, subagents, or internal reviewer terminology.
+The system MUST present workflow stage and checkpoint progress inside the host workbench using user-facing labels and actions rather than requiring users to understand git, skills, subagents, or internal reviewer terminology.
 
 #### Scenario: Internal automation is active
 - **WHEN** the workflow is running a hidden internal step
-- **THEN** the default host labels the stage using user-facing language such as drafting, checking, or preparing the next result
+- **THEN** the host shows the current stage in user-facing language such as drafting, checking, or preparing the next result within the workbench stage context
 
 #### Scenario: Completion state is shown
-- **WHEN** the host presents the final `spec + plan` bundle
-- **THEN** it describes the result in user-facing terms rather than engineering workflow jargon
+- **WHEN** the host presents the final `spec + plan` bundle and finished result
+- **THEN** it describes the completion state and supporting package in user-facing terms inside the workbench rather than engineering workflow jargon
 

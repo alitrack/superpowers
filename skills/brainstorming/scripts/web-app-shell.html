@@ -2,21 +2,24 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Brainstorm Canvas Workspace</title>
+  <title>Brainstorm Workbench</title>
   <style>
     :root {
-      --bg: #f4ecdf;
-      --bg-deep: #eadccc;
-      --panel: rgba(255, 252, 247, 0.9);
-      --panel-strong: #fffdfa;
-      --border: rgba(91, 68, 53, 0.14);
-      --border-strong: rgba(91, 68, 53, 0.28);
-      --text: #1d1712;
-      --muted: #706055;
-      --accent: #9d4b2e;
-      --accent-deep: #5c2d1c;
-      --accent-soft: rgba(157, 75, 46, 0.1);
-      --shadow: 0 28px 70px rgba(58, 37, 26, 0.1);
+      --bg: #f4eee2;
+      --bg-deep: #eadfce;
+      --panel: rgba(255, 251, 245, 0.9);
+      --panel-strong: rgba(255, 255, 255, 0.96);
+      --panel-soft: rgba(249, 241, 232, 0.82);
+      --border: rgba(93, 70, 56, 0.15);
+      --border-strong: rgba(93, 70, 56, 0.3);
+      --text: #1f1814;
+      --muted: #6e5d52;
+      --accent: #8b4b33;
+      --accent-deep: #4f281b;
+      --accent-soft: rgba(139, 75, 51, 0.1);
+      --pine: #34584f;
+      --pine-soft: rgba(52, 88, 79, 0.12);
+      --shadow: 0 28px 70px rgba(59, 38, 26, 0.1);
       --display-font: "Fraunces", "Iowan Old Style", "Palatino Linotype", serif;
       --body-font: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
     }
@@ -29,8 +32,8 @@
       font-family: var(--body-font);
       color: var(--text);
       background:
-        radial-gradient(circle at top left, rgba(157, 75, 46, 0.16), transparent 30%),
-        radial-gradient(circle at 82% 12%, rgba(48, 104, 93, 0.12), transparent 22%),
+        radial-gradient(circle at 12% 8%, rgba(139, 75, 51, 0.16), transparent 24%),
+        radial-gradient(circle at 84% 10%, rgba(52, 88, 79, 0.14), transparent 20%),
         linear-gradient(180deg, var(--bg), var(--bg-deep));
     }
 
@@ -40,25 +43,26 @@
       inset: 0;
       pointer-events: none;
       background-image:
-        linear-gradient(rgba(91, 68, 53, 0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(91, 68, 53, 0.03) 1px, transparent 1px);
-      background-size: 30px 30px;
-      opacity: 0.45;
+        linear-gradient(rgba(93, 70, 56, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(93, 70, 56, 0.03) 1px, transparent 1px);
+      background-size: 28px 28px;
+      opacity: 0.55;
     }
 
     .app-shell {
+      position: relative;
+      z-index: 1;
       min-height: 100vh;
       display: grid;
       grid-template-columns: 280px minmax(0, 1fr);
-      gap: 1.2rem;
-      padding: 1.2rem;
-      position: relative;
-      z-index: 1;
+      gap: 1rem;
+      padding: 1rem;
     }
 
     .session-rail,
     .shell-header,
-    .canvas-board {
+    .workbench-board,
+    .panel {
       background: var(--panel);
       border: 1px solid var(--border);
       box-shadow: var(--shadow);
@@ -66,90 +70,159 @@
     }
 
     .session-rail {
-      border-radius: 30px;
-      padding: 1.1rem;
       position: sticky;
-      top: 1.2rem;
+      top: 1rem;
       align-self: start;
-      min-height: calc(100vh - 2.4rem);
+      min-height: calc(100vh - 2rem);
+      border-radius: 28px;
+      padding: 1rem;
       display: grid;
       gap: 1rem;
       align-content: start;
       background:
-        linear-gradient(180deg, rgba(255,255,255,0.76), rgba(255,248,241,0.9)),
-        linear-gradient(135deg, rgba(157, 75, 46, 0.08), rgba(48, 104, 93, 0.04));
+        linear-gradient(180deg, rgba(255,255,255,0.82), rgba(255,247,239,0.92)),
+        linear-gradient(135deg, rgba(139, 75, 51, 0.08), rgba(52, 88, 79, 0.05));
     }
 
+    .workspace {
+      display: grid;
+      gap: 1rem;
+      align-content: start;
+    }
+
+    .shell-header {
+      border-radius: 28px;
+      padding: 1rem 1.05rem;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+      gap: 1rem;
+      align-items: start;
+    }
+
+    .workbench-board {
+      border-radius: 30px;
+      padding: 1rem;
+      display: grid;
+      gap: 1rem;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.78), rgba(255,248,242,0.92)),
+        linear-gradient(135deg, rgba(139, 75, 51, 0.06), rgba(52, 88, 79, 0.04));
+    }
+
+    .panel {
+      border-radius: 24px;
+      padding: 0.95rem;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.85), rgba(255,249,243,0.94)),
+        linear-gradient(135deg, rgba(255,255,255,0.42), rgba(245,236,227,0.24));
+    }
+
+    .panel-label,
     .rail-mark,
     .eyebrow,
-    .decision-kicker,
-    .canvas-card-badge {
+    .tree-node-badge,
+    .meta-pill,
+    .mode-button,
+    .stage-chip {
       display: inline-flex;
-      width: fit-content;
       align-items: center;
-      padding: 0.32rem 0.62rem;
+      width: fit-content;
       border-radius: 999px;
-      background: var(--accent-soft);
-      color: var(--accent-deep);
+      padding: 0.3rem 0.62rem;
       font-size: 0.72rem;
       text-transform: uppercase;
       letter-spacing: 0.12em;
-      border: 1px solid rgba(157, 75, 46, 0.15);
     }
 
-    .session-rail h1 {
-      margin: 0.35rem 0 0 0;
+    .panel-label,
+    .rail-mark,
+    .eyebrow,
+    .tree-node-badge,
+    .stage-chip {
+      background: var(--accent-soft);
+      border: 1px solid rgba(139, 75, 51, 0.16);
+      color: var(--accent-deep);
+    }
+
+    .mode-button {
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.7);
+      color: var(--muted);
+      cursor: pointer;
+      transition: border-color 180ms ease, background 180ms ease, color 180ms ease, transform 180ms ease;
+    }
+
+    .mode-button.active {
+      color: var(--accent-deep);
+      background: rgba(255, 247, 240, 0.96);
+      border-color: rgba(139, 75, 51, 0.28);
+    }
+
+    .mode-button:hover {
+      transform: translateY(-1px);
+      border-color: var(--border-strong);
+    }
+
+    .rail-copy h1 {
+      margin: 0.45rem 0 0 0;
       font-family: var(--display-font);
-      font-size: 2rem;
-      line-height: 0.96;
+      font-size: 1.8rem;
+      line-height: 0.98;
       letter-spacing: -0.04em;
-      max-width: 8ch;
+      font-weight: 600;
+      max-width: 9ch;
+    }
+
+    .rail-copy p,
+    .workspace-copy p,
+    .new-topic-dock p,
+    .board-toolbar p,
+    .session-item span,
+    .panel-copy,
+    .path-note,
+    .empty-copy,
+    .context-block p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .workspace-copy h2 {
+      margin: 0.45rem 0 0.5rem 0;
+      font-family: var(--display-font);
+      font-size: clamp(1.7rem, 2.7vw, 2.5rem);
+      line-height: 0.98;
+      letter-spacing: -0.045em;
+      max-width: 14ch;
       font-weight: 600;
     }
 
-    .session-rail p,
-    .shell-header p,
-    .board-toolbar p,
-    .new-brainstorm-card p {
-      margin: 0;
-      color: var(--muted);
-      line-height: 1.7;
-    }
-
-    .rail-note {
-      padding: 0.95rem;
+    .working-rule {
+      padding: 0.9rem;
       border-radius: 22px;
-      background: rgba(255,255,255,0.72);
       border: 1px solid var(--border);
+      background: rgba(255,255,255,0.72);
       color: var(--muted);
       line-height: 1.6;
-      font-size: 0.9rem;
+      font-size: 0.92rem;
     }
 
-    .rail-note strong {
+    .working-rule strong {
       display: block;
       margin-bottom: 0.32rem;
       color: var(--accent-deep);
     }
 
-    .panel-label {
-      font-size: 0.74rem;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: var(--accent-deep);
-      margin-bottom: 0.6rem;
-    }
-
     .session-list {
       display: grid;
-      gap: 0.72rem;
+      gap: 0.7rem;
     }
 
     .session-item {
       border-radius: 18px;
       border: 1px solid var(--border);
       background: rgba(255,255,255,0.78);
-      padding: 0.9rem;
+      padding: 0.88rem;
       cursor: pointer;
       transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
     }
@@ -157,417 +230,356 @@
     .session-item:hover {
       transform: translateY(-1px);
       border-color: var(--border-strong);
-      box-shadow: 0 16px 28px rgba(58, 37, 26, 0.08);
+      box-shadow: 0 16px 30px rgba(59, 38, 26, 0.08);
       background: rgba(255,255,255,0.96);
     }
 
     .session-item.active {
-      background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(255, 239, 230, 0.96));
-      border-color: rgba(157, 75, 46, 0.32);
-      box-shadow: 0 18px 34px rgba(95, 53, 31, 0.12);
+      border-color: rgba(139, 75, 51, 0.28);
+      background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(255, 240, 231, 0.96));
     }
 
     .session-item strong,
-    .session-item span {
+    .tree-node strong,
+    .result-card strong,
+    .package-card strong,
+    .selected-node-panel strong,
+    .stage-strip strong,
+    .active-stage-title {
       display: block;
     }
 
-    .session-item span {
-      margin-top: 0.28rem;
-      font-size: 0.82rem;
-      color: var(--muted);
-      line-height: 1.5;
-    }
-
-    .workspace {
-      display: grid;
-      gap: 1.2rem;
-      align-content: start;
-    }
-
-    .shell-header {
-      border-radius: 34px;
-      padding: 1.15rem;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
-      gap: 1rem;
-      align-items: start;
-    }
-
-    .shell-header h2 {
-      margin: 0.52rem 0 0.55rem 0;
-      font-family: var(--display-font);
-      font-size: clamp(2.45rem, 4.3vw, 4.7rem);
-      line-height: 0.94;
-      letter-spacing: -0.06em;
-      max-width: 10ch;
-      font-weight: 600;
-    }
-
-    .new-brainstorm-card {
-      border-radius: 28px;
+    .new-topic-dock {
+      border-radius: 24px;
       border: 1px solid var(--border);
-      background:
-        linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,248,240,0.86)),
-        linear-gradient(135deg, rgba(157,75,46,0.08), rgba(48,104,93,0.04));
-      padding: 1rem;
+      padding: 0.95rem;
       display: grid;
       gap: 0.8rem;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,247,240,0.88)),
+        linear-gradient(135deg, rgba(139,75,51,0.08), rgba(52,88,79,0.05));
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.72);
     }
 
-    .new-brainstorm-card strong {
+    .new-topic-dock strong {
       display: block;
+      font-size: 1rem;
       color: var(--accent-deep);
-      font-size: 0.84rem;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
     }
 
-    .new-brainstorm-card textarea {
+    textarea {
       width: 100%;
-      min-height: 132px;
+      min-height: 116px;
       resize: vertical;
-      border-radius: 20px;
+      padding: 0.9rem 0.95rem;
+      border-radius: 18px;
       border: 1px solid var(--border);
-      padding: 0.95rem 1rem;
-      background: rgba(255, 253, 249, 0.96);
+      background: rgba(255,255,255,0.92);
       color: var(--text);
       font: inherit;
-      line-height: 1.65;
+      line-height: 1.55;
     }
 
-    .new-brainstorm-card textarea:focus,
-    button:focus {
-      outline: 2px solid rgba(157, 75, 46, 0.16);
-      border-color: rgba(157, 75, 46, 0.4);
+    textarea:focus,
+    button:focus,
+    a:focus,
+    .tree-node:focus {
+      outline: 2px solid rgba(52, 88, 79, 0.28);
+      outline-offset: 2px;
     }
 
     .composer-actions,
-    .workspace-mode-toggle {
+    .workspace-mode-toggle,
+    .completion-action-row,
+    .active-stage-meta {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.75rem;
+      gap: 0.6rem;
     }
 
     button,
     .completion-action {
-      appearance: none;
       border: 1px solid var(--border);
       border-radius: 999px;
-      background: rgba(255,255,255,0.9);
+      padding: 0.72rem 1rem;
+      background: rgba(255,255,255,0.88);
       color: var(--text);
-      cursor: pointer;
       font: inherit;
-      padding: 0.78rem 1.08rem;
-      transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
-    }
-
-    .completion-action {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
+      cursor: pointer;
       text-decoration: none;
+      transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
     }
 
     button:hover,
     .completion-action:hover {
       transform: translateY(-1px);
       border-color: var(--border-strong);
-      box-shadow: 0 16px 28px rgba(58, 37, 26, 0.1);
       background: rgba(255,255,255,0.98);
     }
 
-    .primary-button,
-    .mode-button.active {
-      background: linear-gradient(135deg, rgba(157, 75, 46, 0.96), rgba(114, 53, 30, 0.98));
-      border-color: rgba(114, 53, 30, 0.72);
-      color: #fff8f2;
-      box-shadow: 0 16px 28px rgba(58, 37, 26, 0.12);
+    .primary-button {
+      background: linear-gradient(135deg, var(--accent), #b56b4b);
+      color: white;
+      border-color: transparent;
+      box-shadow: 0 16px 32px rgba(139, 75, 51, 0.18);
+    }
+
+    .primary-button:hover {
+      background: linear-gradient(135deg, #7a3f2a, #9f5d40);
     }
 
     .composer-error {
-      color: #9a2c1a;
-      font-size: 0.92rem;
-    }
-
-    .canvas-board {
-      border-radius: 34px;
-      padding: 1.15rem;
-      display: grid;
-      gap: 1rem;
-      background:
-        linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,249,243,0.96)),
-        linear-gradient(135deg, rgba(157, 75, 46, 0.05), transparent 34%);
+      color: #9f3c26;
+      font-size: 0.88rem;
     }
 
     .board-toolbar {
       display: grid;
-      gap: 0.72rem;
-      padding-bottom: 0.9rem;
-      border-bottom: 1px solid rgba(91, 68, 53, 0.08);
+      grid-template-columns: minmax(0, 1.2fr) minmax(280px, 1fr) auto;
+      gap: 0.8rem;
+      align-items: center;
     }
 
-    .canvas-layout {
+    .stage-strip {
+      padding: 0.85rem 0.9rem;
+      border-radius: 20px;
+      border: 1px solid rgba(52, 88, 79, 0.18);
+      background:
+        linear-gradient(180deg, rgba(244,251,247,0.95), rgba(255,255,255,0.88)),
+        linear-gradient(135deg, rgba(52,88,79,0.1), rgba(139,75,51,0.04));
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 330px;
+      gap: 0.45rem;
+    }
+
+    .stage-strip strong {
+      font-size: 0.98rem;
+      color: var(--pine);
+    }
+
+    .workbench-grid {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr) 340px;
       gap: 1rem;
       align-items: start;
     }
 
-    .canvas-anchor-card,
-    .canvas-column > section {
-      border-radius: 30px;
-      border: 1px solid var(--border);
-      box-shadow: var(--shadow);
-      background: rgba(255,255,255,0.82);
-    }
-
-    .canvas-anchor-card {
-      padding: 1.1rem;
-      min-height: 100%;
-      position: relative;
-      overflow: hidden;
-      background:
-        linear-gradient(180deg, rgba(255,255,255,0.93), rgba(255,250,246,0.96)),
-        radial-gradient(circle at top right, rgba(157, 75, 46, 0.08), transparent 28%);
-    }
-
-    .decision-header {
+    .decision-tree-panel,
+    .context-panel {
       display: grid;
-      gap: 0.72rem;
-      padding-bottom: 1rem;
-      border-bottom: 1px solid rgba(91, 68, 53, 0.08);
-      margin-bottom: 1rem;
+      gap: 0.9rem;
     }
 
-    .decision-title {
-      margin: 0;
-      font-family: var(--display-font);
-      font-size: clamp(2.15rem, 3.5vw, 3.6rem);
-      line-height: 0.98;
-      letter-spacing: -0.05em;
-      font-weight: 600;
-      max-width: 12ch;
-    }
-
-    .decision-copy {
-      margin: 0;
-      color: var(--muted);
-      line-height: 1.72;
-      max-width: 66ch;
-      font-size: 0.97rem;
-    }
-
-    .decision-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.55rem;
-    }
-
-    .meta-pill {
-      display: inline-flex;
-      align-items: center;
-      padding: 0.34rem 0.6rem;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.84);
-      border: 1px solid var(--border);
-      color: var(--muted);
-      font-size: 0.8rem;
-    }
-
-    .stage-host,
-    .completion-surface {
-      border-radius: 24px;
-      border: 1px solid rgba(91, 68, 53, 0.1);
-      background: rgba(255,255,255,0.82);
-      padding: 1rem;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.75);
-    }
-
-    .completion-surface[hidden] {
-      display: none;
-    }
-
-    .artifact-block,
-    .inspector-body {
-      margin-top: 0.9rem;
-      padding: 0.95rem;
-      border-radius: 18px;
-      border: 1px solid var(--border);
-      background: rgba(255,255,255,0.76);
-      white-space: pre-wrap;
-      word-break: break-word;
-      line-height: 1.68;
-      font-size: 0.92rem;
-      color: var(--muted);
-    }
-
-    .completion-grid,
-    .supporting-card-list {
-      display: grid;
-      gap: 0.8rem;
-    }
-
-    .completion-action-row,
-    .completion-hero,
-    .completion-section-grid,
-    .completion-package-grid {
-      display: grid;
-      gap: 0.8rem;
-    }
-
-    .completion-action-row {
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      margin-top: 0.9rem;
-    }
-
-    .completion-hero-card {
-      background:
-        linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,246,238,0.96)),
-        radial-gradient(circle at top right, rgba(157, 75, 46, 0.08), transparent 28%);
-    }
-
-    .completion-card p {
-      margin: 0.38rem 0 0 0;
-      color: var(--muted);
-      line-height: 1.68;
-      font-size: 0.92rem;
-    }
-
-    .completion-package-head {
-      display: grid;
-      gap: 0.35rem;
-      margin-top: 1rem;
-    }
-
-    .completion-package-head p {
-      margin: 0;
-      color: var(--muted);
-      line-height: 1.68;
-      font-size: 0.9rem;
-    }
-
-    .completion-card,
-    .canvas-card {
-      border-radius: 18px;
-      border: 1px solid var(--border);
-      background: rgba(255,255,255,0.78);
-      padding: 0.92rem;
-      transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
-    }
-
-    .canvas-card {
-      cursor: pointer;
-    }
-
-    .canvas-card:hover {
-      transform: translateY(-1px);
-      border-color: var(--border-strong);
-      box-shadow: 0 16px 28px rgba(58, 37, 26, 0.08);
-      background: rgba(255,255,255,0.96);
-    }
-
-    .canvas-card.selected {
-      background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(255, 239, 230, 0.95));
-      border-color: rgba(157, 75, 46, 0.32);
-      box-shadow: 0 18px 34px rgba(95, 53, 31, 0.12);
-    }
-
-    .canvas-card[data-kind="review-draft"] {
-      background: linear-gradient(180deg, rgba(255,250,243,0.96), rgba(255,255,255,0.9));
-    }
-
-    .canvas-card[data-kind="shortlisted-direction"] {
-      background: linear-gradient(180deg, rgba(244, 251, 247, 0.96), rgba(255,255,255,0.88));
-    }
-
-    .canvas-card strong,
-    .canvas-card span,
-    .completion-card strong,
-    .completion-card span {
-      display: block;
-    }
-
-    .canvas-card span,
-    .completion-card span {
-      margin-top: 0.3rem;
-      color: var(--muted);
-      line-height: 1.6;
-      font-size: 0.88rem;
-    }
-
-    .canvas-column {
-      display: grid;
-      gap: 1rem;
-      align-content: start;
-    }
-
-    .canvas-column > section {
-      padding: 1rem;
-      background:
-        linear-gradient(180deg, rgba(255,255,255,0.92), rgba(248,242,235,0.94)),
-        linear-gradient(135deg, rgba(48, 104, 93, 0.04), rgba(157, 75, 46, 0.04));
-    }
-
-    .context-head {
+    .tree-header,
+    .panel-header {
       display: flex;
       justify-content: space-between;
-      align-items: start;
       gap: 0.8rem;
-    }
-
-    .context-head p {
-      margin: 0.2rem 0 0 0;
-      color: var(--muted);
-      line-height: 1.6;
-      font-size: 0.9rem;
+      align-items: start;
     }
 
     .history-toggle-button {
       white-space: nowrap;
-      padding: 0.62rem 0.86rem;
-      font-size: 0.88rem;
     }
 
-    .history-footnote,
-    .empty-copy {
+    .tree-group {
+      display: grid;
+      gap: 0.6rem;
+    }
+
+    .tree-group-title {
+      margin: 0;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--accent-deep);
+    }
+
+    .tree-list {
+      display: grid;
+      gap: 0.8rem;
+    }
+
+    .tree-node-list {
+      display: grid;
+      gap: 0.5rem;
+      position: relative;
+    }
+
+    .tree-node-list::before {
+      content: "";
+      position: absolute;
+      left: 0.92rem;
+      top: 0.2rem;
+      bottom: 0.2rem;
+      width: 1px;
+      background: linear-gradient(180deg, rgba(139, 75, 51, 0.24), rgba(52, 88, 79, 0.18));
+    }
+
+    .tree-node {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      gap: 0.28rem;
+      padding: 0.8rem 0.82rem 0.8rem 1.55rem;
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.82);
+      text-align: left;
+      cursor: pointer;
+      transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+    }
+
+    .tree-node::before {
+      content: "";
+      position: absolute;
+      left: 0.72rem;
+      top: 1rem;
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(139, 75, 51, 0.4);
+      box-shadow: 0 0 0 4px rgba(139, 75, 51, 0.08);
+    }
+
+    .tree-node:hover {
+      transform: translateY(-1px);
+      border-color: var(--border-strong);
+    }
+
+    .tree-node.active {
+      border-color: rgba(52, 88, 79, 0.28);
+      background: linear-gradient(135deg, rgba(247,253,250,0.96), rgba(255,255,255,0.94));
+    }
+
+    .tree-node.active::before {
+      background: var(--pine);
+      box-shadow: 0 0 0 4px rgba(52, 88, 79, 0.12);
+    }
+
+    .tree-node.selected {
+      border-color: rgba(139, 75, 51, 0.32);
+      background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(255, 241, 232, 0.96));
+    }
+
+    .tree-node span {
       color: var(--muted);
-      line-height: 1.65;
-      font-size: 0.88rem;
+      line-height: 1.5;
+      font-size: 0.92rem;
     }
 
-    .history-footnote {
-      padding: 0.8rem 0.88rem;
-      border-radius: 16px;
-      border: 1px dashed rgba(91, 68, 53, 0.18);
-      background: rgba(255,255,255,0.5);
+    .active-stage-panel {
+      display: grid;
+      gap: 0.95rem;
+      padding: 1rem;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,248,242,0.96)),
+        linear-gradient(135deg, rgba(255,255,255,0.5), rgba(245,236,227,0.24));
     }
 
-    .empty-stage h3 {
+    .active-stage-header {
+      display: grid;
+      gap: 0.65rem;
+    }
+
+    .active-stage-title {
       margin: 0;
       font-family: var(--display-font);
-      font-size: clamp(1.8rem, 3vw, 2.8rem);
+      font-size: clamp(1.5rem, 2.3vw, 2.25rem);
       line-height: 0.98;
       letter-spacing: -0.04em;
       font-weight: 600;
     }
 
-    .empty-stage p,
-    .completion-surface p {
+    .active-stage-copy {
       margin: 0;
       color: var(--muted);
-      line-height: 1.72;
+      line-height: 1.7;
+      font-size: 0.98rem;
     }
 
-    .path {
-      margin-top: 0.35rem;
-      font-size: 0.82rem;
+    .stage-host,
+    .empty-stage {
+      min-height: 320px;
+      border-radius: 22px;
+      border: 1px solid rgba(93, 70, 56, 0.12);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,248,242,0.92)),
+        linear-gradient(135deg, rgba(139,75,51,0.05), rgba(52,88,79,0.03));
+      padding: 0.95rem;
+    }
+
+    .selected-node-panel,
+    .finished-result-panel {
+      display: grid;
+      gap: 0.7rem;
+    }
+
+    .selected-node-panel {
+      padding: 0.95rem;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.8);
+    }
+
+    .selected-node-panel .body,
+    .context-section-card .body,
+    .artifact-block,
+    .package-card .path {
+      white-space: pre-wrap;
       color: var(--muted);
-      word-break: break-all;
+      line-height: 1.6;
+      font-size: 0.92rem;
+      word-break: break-word;
     }
 
-    @media (max-width: 1160px) {
+    .context-section-list,
+    .completion-section-grid,
+    .completion-package-grid {
+      display: grid;
+      gap: 0.7rem;
+    }
+
+    .context-section-card,
+    .result-card,
+    .package-card {
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.82);
+      padding: 0.8rem;
+      display: grid;
+      gap: 0.45rem;
+    }
+
+    .completion-hero {
+      display: grid;
+      gap: 0.7rem;
+    }
+
+    .result-card.hero {
+      background:
+        linear-gradient(180deg, rgba(248,252,250,0.96), rgba(255,255,255,0.92)),
+        linear-gradient(135deg, rgba(52,88,79,0.08), rgba(139,75,51,0.05));
+      border-color: rgba(52, 88, 79, 0.22);
+    }
+
+    .supporting-package-panel[hidden],
+    .finished-result-panel[hidden] {
+      display: none;
+    }
+
+    @media (max-width: 1180px) {
+      .shell-header,
+      .board-toolbar,
+      .workbench-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .board-toolbar {
+        align-items: start;
+      }
+    }
+
+    @media (max-width: 900px) {
       .app-shell {
         grid-template-columns: 1fr;
       }
@@ -576,134 +588,144 @@
         position: static;
         min-height: auto;
       }
-
-      .shell-header,
-      .canvas-layout {
-        grid-template-columns: 1fr;
-      }
     }
 
-    @media (max-width: 720px) {
+    @media (max-width: 640px) {
       .app-shell {
-        padding: 0.8rem;
+        padding: 0.75rem;
       }
 
       .session-rail,
       .shell-header,
-      .canvas-board,
-      .canvas-anchor-card,
-      .canvas-column > section {
-        border-radius: 24px;
+      .workbench-board,
+      .panel {
+        border-radius: 22px;
       }
 
-      .shell-header h2,
-      .decision-title {
-        max-width: none;
+      .shell-header {
+        padding: 0.9rem;
+      }
+
+      .workspace-copy h2 {
+        font-size: 1.55rem;
+      }
+
+      .active-stage-title {
+        font-size: 1.42rem;
       }
     }
   </style>
 </head>
 <body>
-  <div id="brainstorm-canvas-workspace" class="app-shell">
+  <div id="brainstorm-workbench" class="app-shell">
     <aside class="session-rail">
-      <div>
+      <div class="rail-copy">
         <div class="rail-mark">Brainstorming</div>
-        <h1>Canvas workspace.</h1>
-        <p>当前正式问题是锚点，最近步骤、候选方向和完成结果以 supporting cards 的方式围绕它展开。</p>
+        <h1>Branch-first workbench.</h1>
+        <p>不是再堆一页卡片，而是把当前问题、已走路径和交付结果放进同一个可理解的工作台。</p>
       </div>
 
-      <div class="rail-note">
+      <div class="working-rule">
         <strong>Working rule</strong>
-        Ask exactly one formal question at a time. The workspace can feel spatial, but the active answerable decision must stay singular.
+        Ask exactly one formal question at a time. The workspace may show branch context, but only one active node can accept an answer.
       </div>
 
-      <div>
+      <section>
         <div class="panel-label">Recent Sessions</div>
         <div id="session-list" class="session-list"></div>
-      </div>
+      </section>
     </aside>
 
     <main class="workspace">
       <section class="shell-header">
-        <div>
-          <div class="eyebrow">Brainstorm Canvas Workspace</div>
-          <h2 id="workspace-title">Current decision, spatial context.</h2>
-          <p id="workspace-subtitle">Start a session, keep the anchor card obvious, and let the surrounding cards explain how this brainstorm is converging.</p>
+        <div class="workspace-copy">
+          <div class="eyebrow">Brainstorm Workbench</div>
+          <h2 id="workspace-title">One live question, visible branch path.</h2>
+          <p id="workspace-subtitle">Keep one active node in focus while the branch path stays visible.</p>
         </div>
 
-        <section class="new-brainstorm-card">
+        <section id="new-brainstorm-dock" class="new-topic-dock">
           <div>
-            <strong>Start A New Brainstorm</strong>
-            <p>这里永远保留新的入口，但不会覆盖你当前正在查看的 session。你可以继续当前轮次，也可以随时开一个新的议题。</p>
+            <strong>Start Another Topic</strong>
+            <p>新议题入口仍然可用，但它现在是次级动作，不再抢走当前这轮头脑风暴的主舞台。</p>
           </div>
-          <textarea id="persistent-seed-input" placeholder="把这轮真正要讨论的问题、困境、冲突或目标张力写在这里。"></textarea>
+          <textarea id="persistent-seed-input" placeholder="把真正要讨论的问题、冲突、目标张力或价值判断写在这里。"></textarea>
           <div class="composer-actions">
-            <button id="persistent-start-artifact" class="primary-button" type="button">Start Artifact Session</button>
-            <button id="persistent-start-summary" type="button">Start Summary Session</button>
+            <button id="persistent-start-artifact" class="primary-button" type="button">Artifact Session</button>
+            <button id="persistent-start-summary" type="button">Summary Session</button>
           </div>
           <div id="persistent-seed-error" class="composer-error" hidden>先写下这轮真正的问题，再开始。</div>
         </section>
       </section>
 
-      <section class="canvas-board">
+      <section class="workbench-board">
         <div class="board-toolbar">
           <div>
-            <div class="panel-label">Workspace Mode</div>
-            <p>Focused View keeps the anchor card dominant. Overview reveals more of the same session structure without creating a second active question.</p>
+            <div class="panel-label">Workbench Mode</div>
+            <p>Keep one active node in focus while the branch path stays visible.</p>
           </div>
+
+          <section id="workflow-stage-strip" class="stage-strip">
+            <div class="stage-chip">Workflow Stage</div>
+            <strong id="workflow-stage-title">Waiting for a real topic</strong>
+            <p id="workflow-stage-copy">Start a session to see the current workflow stage and checkpoint context here.</p>
+          </section>
+
           <div id="workspace-mode-toggle" class="workspace-mode-toggle">
             <button id="workspace-mode-focused" class="mode-button active" type="button">Focused View</button>
             <button id="workspace-mode-overview" class="mode-button" type="button">Overview</button>
           </div>
         </div>
 
-        <div class="canvas-layout">
-          <section id="canvas-anchor-card" class="canvas-anchor-card">
-            <header class="decision-header">
-              <div id="decision-kicker" class="decision-kicker">Current Decision</div>
-              <h3 id="decision-title" class="decision-title">Start with one real problem.</h3>
-              <p id="decision-copy" class="decision-copy">Use the persistent composer to begin a new brainstorming session.</p>
-              <div id="decision-meta" class="decision-meta"></div>
+        <div class="workbench-grid">
+          <section id="decision-tree-panel" class="panel decision-tree-panel">
+            <div class="tree-header">
+              <div>
+                <div class="panel-label">Decision Tree</div>
+                <p id="tree-summary" class="panel-copy">Open a session to see the current path, adjacent directions, and finished nodes.</p>
+              </div>
+              <button id="history-toggle-button" class="history-toggle-button" type="button">Open Full History</button>
+            </div>
+            <div id="decision-tree-list" class="tree-list"></div>
+          </section>
+
+          <section id="active-stage-panel" class="panel active-stage-panel">
+            <header class="active-stage-header">
+              <div id="active-stage-kicker" class="eyebrow">Active Node</div>
+              <h3 id="active-stage-title" class="active-stage-title">Start with one real problem.</h3>
+              <p id="active-stage-copy" class="active-stage-copy">Use the secondary topic dock to begin a new brainstorming session.</p>
+              <div id="active-stage-meta" class="active-stage-meta"></div>
             </header>
-
             <section id="session-root" class="stage-host"></section>
+          </section>
 
-            <section id="mainstage-completion-surface" class="completion-surface" hidden>
+          <aside id="context-panel" class="panel context-panel">
+            <section id="selected-node-panel" class="selected-node-panel">
+              <div class="panel-label">Selected Node</div>
+              <strong id="selected-node-title">No node selected</strong>
+              <div id="selected-node-body" class="body">Select a branch node, checkpoint, or result section to inspect it here.</div>
+            </section>
+
+            <div id="context-section-list" class="context-section-list"></div>
+
+            <section id="finished-result-panel" class="finished-result-panel" hidden>
               <div class="panel-label">Finished Result</div>
               <strong id="completion-title">Spec and plan are ready</strong>
-              <p id="completion-cluster-copy">When the workflow finishes, the finished result becomes the visible completion cluster inside the workspace.</p>
+              <p id="completion-cluster-copy" class="panel-copy">Review the finished result, then inspect or export the supporting package.</p>
               <div id="completion-action-row" class="completion-action-row">
                 <a id="completion-export-markdown" class="completion-action primary-button" href="#" download="brainstorm-result.md">Export Markdown</a>
                 <a id="completion-export-json" class="completion-action" href="#" download="brainstorm-result.json">Export JSON</a>
               </div>
               <div id="completion-hero" class="completion-hero"></div>
               <div id="completion-section-grid" class="completion-section-grid"></div>
-              <div id="completion-supporting-package" class="completion-package">
-                <div class="completion-package-head">
-                  <div class="panel-label">Supporting Package</div>
-                  <p>Spec、plan 和 bundle 仍然保留在这里，但它们现在是支撑结果的资产，而不是主舞台本身。</p>
-                </div>
-                <div id="completion-package-grid" class="completion-package-grid"></div>
-              </div>
-            </section>
-          </section>
-
-          <aside class="canvas-column">
-            <section id="canvas-supporting-cards" class="canvas-supporting-cards">
-              <div class="context-head">
-                <div>
-                  <div class="panel-label">Supporting Cards</div>
-                  <p>Only the latest 2-3 completed steps stay visible by default so the current decision remains primary.</p>
-                </div>
-                <button id="history-toggle-button" class="history-toggle-button" type="button">Open Full History</button>
-              </div>
-              <div id="supporting-card-list" class="supporting-card-list"></div>
             </section>
 
-            <section id="canvas-inspector" class="canvas-inspector">
-              <div class="panel-label">Inspector</div>
-              <strong id="inspector-title">Canvas Inspector</strong>
-              <div id="inspector-body" class="inspector-body">Select a supporting card to inspect it without replacing the current active decision.</div>
+            <section id="supporting-package-panel" class="supporting-package-panel" hidden>
+              <div id="completion-supporting-package">
+                <div class="panel-label">Supporting Package</div>
+                <p class="panel-copy">Spec、plan 和 bundle 仍然存在，但它们已经退居为支撑结果的工作台资产。</p>
+              </div>
+              <div id="completion-package-grid" class="completion-package-grid"></div>
             </section>
           </aside>
         </div>
@@ -716,18 +738,24 @@
   <script>
     window.addEventListener('load', () => {
       const rootEl = document.getElementById('session-root');
-      const supportingCardListEl = document.getElementById('supporting-card-list');
       const sessionListEl = document.getElementById('session-list');
       const titleEl = document.getElementById('workspace-title');
       const subtitleEl = document.getElementById('workspace-subtitle');
-      const decisionKickerEl = document.getElementById('decision-kicker');
-      const decisionTitleEl = document.getElementById('decision-title');
-      const decisionCopyEl = document.getElementById('decision-copy');
-      const decisionMetaEl = document.getElementById('decision-meta');
+      const stageTitleEl = document.getElementById('workflow-stage-title');
+      const stageCopyEl = document.getElementById('workflow-stage-copy');
+      const activeStageKickerEl = document.getElementById('active-stage-kicker');
+      const activeStageTitleEl = document.getElementById('active-stage-title');
+      const activeStageCopyEl = document.getElementById('active-stage-copy');
+      const activeStageMetaEl = document.getElementById('active-stage-meta');
+      const treeSummaryEl = document.getElementById('tree-summary');
+      const treeListEl = document.getElementById('decision-tree-list');
+      const selectedNodeTitleEl = document.getElementById('selected-node-title');
+      const selectedNodeBodyEl = document.getElementById('selected-node-body');
+      const contextSectionListEl = document.getElementById('context-section-list');
       const persistentSeedInputEl = document.getElementById('persistent-seed-input');
       const persistentSeedErrorEl = document.getElementById('persistent-seed-error');
       const historyToggleButtonEl = document.getElementById('history-toggle-button');
-      const completionSurfaceEl = document.getElementById('mainstage-completion-surface');
+      const completionSurfaceEl = document.getElementById('finished-result-panel');
       const completionTitleEl = document.getElementById('completion-title');
       const completionClusterCopyEl = document.getElementById('completion-cluster-copy');
       const completionActionRowEl = document.getElementById('completion-action-row');
@@ -735,10 +763,8 @@
       const completionExportJsonEl = document.getElementById('completion-export-json');
       const completionHeroEl = document.getElementById('completion-hero');
       const completionSectionGridEl = document.getElementById('completion-section-grid');
-      const completionSupportingPackageEl = document.getElementById('completion-supporting-package');
+      const supportingPackagePanelEl = document.getElementById('supporting-package-panel');
       const completionPackageGridEl = document.getElementById('completion-package-grid');
-      const inspectorTitleEl = document.getElementById('inspector-title');
-      const inspectorBodyEl = document.getElementById('inspector-body');
       const workspaceModeFocusedEl = document.getElementById('workspace-mode-focused');
       const workspaceModeOverviewEl = document.getElementById('workspace-mode-overview');
 
@@ -786,52 +812,28 @@
 
       function truncateSeed(text) {
         if (!text) {
-          return 'Current decision, spatial context.';
+          return 'One live question, visible branch path.';
         }
-        return text.length > 88 ? `${text.slice(0, 88)}…` : text;
+        return text.length > 72 ? `${text.slice(0, 72)}…` : text;
       }
 
-      function setDecisionMeta(view, session) {
-        const pills = [];
-        if (view.stage && view.stage.title) {
-          pills.push(view.stage.title);
-        }
-        if (view.history && typeof view.history.totalCount === 'number') {
-          pills.push(`${view.history.totalCount} completed step${view.history.totalCount === 1 ? '' : 's'}`);
-        }
-        if (view.canvasWorkspace && view.canvasWorkspace.mode) {
-          pills.push(view.canvasWorkspace.mode);
-        }
-        if (session && session.completionMode) {
-          pills.push(`${session.completionMode} mode`);
-        }
-        decisionMetaEl.innerHTML = pills.map((item) => (
-          `<span class="meta-pill">${escapeHtml(item)}</span>`
-        )).join('');
-      }
-
-      function setMainstageHeader(view, session) {
+      function setHeader(view, session) {
         const message = session && session.currentMessage ? session.currentMessage : null;
         titleEl.textContent = session && session.seedPrompt
           ? truncateSeed(session.seedPrompt)
-          : 'Current decision, spatial context.';
+          : 'One live question, visible branch path.';
 
         if (!session || !message) {
-          subtitleEl.textContent = 'Start a session, keep the anchor card obvious, and let supporting cards explain how the brainstorm is converging.';
+          subtitleEl.textContent = 'Keep one active node in focus while the branch path stays visible.';
         } else if (view.mode === 'completion') {
-          subtitleEl.textContent = 'This round is complete. The workspace now shows a dedicated completion cluster while keeping a fresh brainstorm entry available.';
-        } else if (view.mode === 'review') {
-          subtitleEl.textContent = 'A review checkpoint is active. The approval decision remains the anchor card, while the draft appears only as supporting context.';
+          subtitleEl.textContent = 'This round is complete. The finished result stays inside the same workbench, alongside its path and package.';
         } else if (view.mode === 'summary') {
-          subtitleEl.textContent = 'This session has converged. The canvas keeps the result readable without losing the current workspace structure.';
+          subtitleEl.textContent = 'The session has converged. Review the recommendation without losing the branch path that led to it.';
+        } else if (view.mode === 'review') {
+          subtitleEl.textContent = 'A review checkpoint is active. The active node stays primary while the draft and path remain inspectable.';
         } else {
-          subtitleEl.textContent = 'Answer the one active question in the anchor card. Supporting cards stay visible, but they remain secondary.';
+          subtitleEl.textContent = 'Answer the one active node. The tree and context panels stay visible, but they do not compete for input.';
         }
-
-        decisionKickerEl.textContent = view.currentDecision.label;
-        decisionTitleEl.textContent = view.currentDecision.title;
-        decisionCopyEl.textContent = view.currentDecision.description;
-        setDecisionMeta(view, session);
       }
 
       function renderWorkspaceMode(view) {
@@ -842,70 +844,129 @@
         workspaceModeOverviewEl.setAttribute('aria-pressed', mode === 'overview' ? 'true' : 'false');
       }
 
-      function renderSupportingCards(view, session) {
-        const history = view.history;
-        const cards = view.canvasWorkspace && Array.isArray(view.canvasWorkspace.supportingCards)
-          ? view.canvasWorkspace.supportingCards
-          : [];
+      function renderStageStrip(view) {
+        const stage = view.stage || null;
+        if (!stage) {
+          stageTitleEl.textContent = 'Waiting for a real topic';
+          stageCopyEl.textContent = 'Start a session to see the current workflow stage and checkpoint context here.';
+          return;
+        }
+        stageTitleEl.textContent = stage.title || 'Current workflow stage';
+        stageCopyEl.textContent = stage.description || 'The workbench keeps this stage visible without exposing protocol jargon.';
+      }
 
-        historyToggleButtonEl.hidden = !history.canExpand && !history.expanded;
-        historyToggleButtonEl.textContent = history.expanded ? 'Collapse History' : 'Open Full History';
+      function renderActiveStage(view) {
+        const stage = view.canvasWorkspace && view.canvasWorkspace.activeStage
+          ? view.canvasWorkspace.activeStage
+          : null;
 
-        if (!cards.length) {
-          if (session && session.seedPrompt) {
-            supportingCardListEl.innerHTML = (
-              `<div class="canvas-card" data-kind="seed-prompt"><strong>Seed prompt</strong><span>${escapeHtml(session.seedPrompt)}</span></div>`
-            );
-            return;
-          }
-          supportingCardListEl.innerHTML = '<div class="canvas-card" data-kind="empty"><strong>No supporting cards yet</strong><span class="empty-copy">先回答当前这个问题，支持卡片和空间结构才会开始形成。</span></div>';
+        if (!stage) {
+          activeStageKickerEl.textContent = 'Active Node';
+          activeStageTitleEl.textContent = 'Start with one real problem.';
+          activeStageCopyEl.textContent = 'Use the secondary topic dock to begin a new brainstorming session.';
+          activeStageMetaEl.innerHTML = '';
           return;
         }
 
-        const items = cards.map((card) => (
-          `<div class="canvas-card${card.id === inspectedCardId ? ' selected' : ''}" data-card-id="${escapeHtml(card.id)}" data-kind="${escapeHtml(card.kind || 'supporting')}">` +
-            (card.badge ? `<div class="canvas-card-badge">${escapeHtml(card.badge)}</div>` : '') +
-            `<strong>${escapeHtml(card.title || 'Supporting card')}</strong>` +
-            `<span>${escapeHtml(card.body || '')}</span>` +
-          `</div>`
-        ));
+        activeStageKickerEl.textContent = stage.label || 'Active Node';
+        activeStageTitleEl.textContent = stage.title || 'Current node';
+        activeStageCopyEl.textContent = stage.description || 'Answer the current node to continue.';
+        activeStageMetaEl.innerHTML = (Array.isArray(stage.metaPills) ? stage.metaPills : []).map((item) => (
+          `<span class="meta-pill">${escapeHtml(item)}</span>`
+        )).join('');
+      }
 
-        if (history.hiddenCount > 0 && !history.expanded) {
-          items.unshift(
-            `<div class="history-footnote">${escapeHtml(`${history.hiddenCount} earlier step${history.hiddenCount === 1 ? '' : 's'} are hidden so the current decision stays primary.`)}</div>`
-          );
+      function renderTreeGroup(title, nodes) {
+        if (!Array.isArray(nodes) || nodes.length === 0) {
+          return '';
+        }
+        const items = nodes.map((node) => (
+          `<button class="tree-node${node.isActive ? ' active' : ''}${node.id === inspectedCardId ? ' selected' : ''}" data-node-id="${escapeHtml(node.id)}" type="button">` +
+            (node.badge ? `<div class="tree-node-badge">${escapeHtml(node.badge)}</div>` : '') +
+            `<strong>${escapeHtml(node.title || node.label || 'Node')}</strong>` +
+            `<span>${escapeHtml(node.body || node.previewText || '')}</span>` +
+          `</button>`
+        )).join('');
+
+        return (
+          `<section class="tree-group">` +
+            `<h4 class="tree-group-title">${escapeHtml(title)}</h4>` +
+            `<div class="tree-node-list">${items}</div>` +
+          `</section>`
+        );
+      }
+
+      function renderDecisionTree(view, session) {
+        const tree = view.canvasWorkspace && view.canvasWorkspace.decisionTree
+          ? view.canvasWorkspace.decisionTree
+          : null;
+
+        if (!tree) {
+          treeSummaryEl.textContent = 'Open a session to see the current path, adjacent directions, and finished nodes.';
+          treeListEl.innerHTML = '<div class="path-note">The branch path appears here once the first formal question is active.</div>';
+          historyToggleButtonEl.hidden = true;
+          return;
         }
 
-        supportingCardListEl.innerHTML = items.join('');
-        Array.from(supportingCardListEl.querySelectorAll('[data-card-id]')).forEach((el) => {
+        const pathCount = Array.isArray(tree.pathNodes) ? Math.max(tree.pathNodes.length - 1, 0) : 0;
+        treeSummaryEl.textContent = `${pathCount} visible path node${pathCount === 1 ? '' : 's'}${tree.hiddenCount ? `, ${tree.hiddenCount} hidden by default` : ''}.`;
+        historyToggleButtonEl.hidden = !view.history.canExpand && !view.history.expanded;
+        historyToggleButtonEl.textContent = view.history.expanded ? 'Collapse History' : 'Open Full History';
+
+        const blocks = [
+          renderTreeGroup('Current Path', tree.pathNodes),
+          renderTreeGroup('Adjacent Directions', tree.contextNodes),
+          renderTreeGroup('Finished Result', tree.resultNodes)
+        ].filter(Boolean);
+
+        treeListEl.innerHTML = blocks.length
+          ? blocks.join('')
+          : '<div class="empty-copy">Once the session begins, the visible branch path will form here.</div>';
+
+        Array.from(treeListEl.querySelectorAll('[data-node-id]')).forEach((el) => {
           el.addEventListener('click', () => {
-            inspectedCardId = el.getAttribute('data-card-id');
+            const nextId = el.getAttribute('data-node-id');
+            inspectedCardId = nextId === inspectedCardId ? null : nextId;
             renderSession(currentSessionSnapshot).catch((error) => {
-              rootEl.innerHTML = `<div class="empty-stage"><strong>Failed to inspect card</strong><p>${escapeHtml(error.message)}</p></div>`;
+              rootEl.innerHTML = `<div class="empty-stage"><strong>Failed to inspect node</strong><p>${escapeHtml(error.message)}</p></div>`;
             });
           });
         });
       }
 
-      function renderInspector(view) {
-        const workspace = view.canvasWorkspace || {};
-        const selectedCard = workspace.inspector ? workspace.inspector.selectedCard : null;
+      function renderContextPanel(view) {
+        const panel = view.canvasWorkspace && view.canvasWorkspace.contextPanel
+          ? view.canvasWorkspace.contextPanel
+          : null;
+        const selectedNode = panel && panel.selectedNode ? panel.selectedNode : null;
 
-        if (!selectedCard) {
-          inspectorTitleEl.textContent = workspace.mode === 'overview' ? 'Canvas Inspector' : 'Focused Workspace';
-          inspectorBodyEl.textContent = workspace.mode === 'overview'
-            ? 'Select a supporting card to inspect more detail while the anchor card remains the only active input target.'
-            : 'Focused mode keeps the anchor card dominant. Select a supporting card if you need more context without losing the current question.';
-          return;
+        if (!selectedNode) {
+          selectedNodeTitleEl.textContent = 'No node selected';
+          selectedNodeBodyEl.textContent = view.mode === 'empty'
+            ? 'Select a branch node, checkpoint, or result section to inspect it here.'
+            : 'The most relevant supporting node will appear here as soon as the workbench has more context.';
+        } else {
+          selectedNodeTitleEl.textContent = selectedNode.title || 'Selected node';
+          selectedNodeBodyEl.textContent = selectedNode.previewText || selectedNode.body || '';
         }
 
-        inspectorTitleEl.textContent = selectedCard.title || 'Supporting card';
-        inspectorBodyEl.textContent = selectedCard.previewText || selectedCard.body || '';
+        const sections = panel && Array.isArray(panel.sections)
+          ? panel.sections.filter((section) => section.kind !== 'selected-node')
+          : [];
+
+        contextSectionListEl.innerHTML = sections.map((section) => (
+          `<article class="context-section-card">` +
+            `<div class="panel-label">${escapeHtml(section.kind.replace(/-/g, ' '))}</div>` +
+            `<strong>${escapeHtml(section.title || 'Context')}</strong>` +
+            `<div class="body">${escapeHtml(section.body || '')}</div>` +
+          `</article>`
+        )).join('');
       }
 
-      async function renderCompletionSurface(view) {
-        if (!view.completion || !view.canvasWorkspace || !view.canvasWorkspace.completionCluster) {
+      function renderCompletionSurface(view) {
+        if (!view.completion) {
           completionSurfaceEl.hidden = true;
+          supportingPackagePanelEl.hidden = true;
           completionHeroEl.innerHTML = '';
           completionSectionGridEl.innerHTML = '';
           completionPackageGridEl.innerHTML = '';
@@ -913,8 +974,8 @@
         }
 
         completionSurfaceEl.hidden = false;
-        completionTitleEl.textContent = view.completion.title;
-        completionClusterCopyEl.textContent = view.completion.description || 'Review the finished result, then export or inspect the supporting package.';
+        completionTitleEl.textContent = view.completion.title || 'Finished result';
+        completionClusterCopyEl.textContent = view.completion.description || 'Review the finished result, then inspect or export the supporting package.';
 
         const exportPaths = view.completion.exportPaths || {};
         completionActionRowEl.hidden = !exportPaths.markdownPath && !exportPaths.jsonPath;
@@ -924,32 +985,31 @@
         completionExportJsonEl.href = exportPaths.jsonPath || '#';
 
         completionHeroEl.innerHTML = (
-          `<div class="completion-card completion-hero-card">` +
-            `<div class="canvas-card-badge">Recommendation</div>` +
+          `<article class="result-card hero">` +
+            `<div class="tree-node-badge">Recommendation</div>` +
             `<strong>${escapeHtml(view.completion.recommendationTitle || view.completion.title || 'Finished result')}</strong>` +
-            `<p>${escapeHtml(view.completion.recommendationSummary || view.completion.description || '')}</p>` +
-          `</div>`
+            `<div class="artifact-block">${escapeHtml(view.completion.recommendationSummary || view.completion.description || '')}</div>` +
+          `</article>`
         );
 
-        const sectionCards = (view.completion.sections || []).map((section) => (
-          `<div class="completion-card">` +
-            `<div class="canvas-card-badge">Result Section</div>` +
+        completionSectionGridEl.innerHTML = (view.completion.sections || []).map((section) => (
+          `<article class="result-card">` +
+            `<div class="tree-node-badge">Result Section</div>` +
             `<strong>${escapeHtml(section.title || 'Section')}</strong>` +
             `<div class="artifact-block">${escapeHtml((section.items || []).join('\n'))}</div>` +
-          `</div>`
-        ));
-        completionSectionGridEl.innerHTML = sectionCards.join('');
+          `</article>`
+        )).join('');
 
-        const packageCards = (view.completion.supportingArtifacts || []).map((artifact) => (
-          `<div class="completion-card">` +
-            `<div class="canvas-card-badge">${escapeHtml(artifact.label || artifact.kind || 'Artifact')}</div>` +
+        const packages = view.completion.supportingArtifacts || [];
+        supportingPackagePanelEl.hidden = packages.length === 0;
+        completionPackageGridEl.innerHTML = packages.map((artifact) => (
+          `<article class="package-card">` +
+            `<div class="tree-node-badge">${escapeHtml(artifact.label || artifact.kind || 'Artifact')}</div>` +
             `<strong>${escapeHtml(artifact.title || 'Supporting artifact')}</strong>` +
-            `<span>${escapeHtml(artifact.previewText || '')}</span>` +
+            `<div class="artifact-block">${escapeHtml(artifact.previewText || '')}</div>` +
             `<div class="path">${escapeHtml(artifact.path || '')}</div>` +
-          `</div>`
-        ));
-        completionSupportingPackageEl.hidden = packageCards.length === 0;
-        completionPackageGridEl.innerHTML = packageCards.join('');
+          `</article>`
+        )).join('');
       }
 
       function renderEmptyStage() {
@@ -961,28 +1021,25 @@
         historyExpanded = false;
         workspaceMode = 'focused';
         inspectedCardId = null;
-        setMainstageHeader(emptyView, null);
+        setHeader(emptyView, null);
         renderWorkspaceMode(emptyView);
-        historyToggleButtonEl.hidden = true;
-        supportingCardListEl.innerHTML = '<div class="canvas-card" data-kind="empty"><strong>No supporting cards yet</strong><span class="empty-copy">开始新的议题后，这里默认只展示最近 2-3 张支持卡片。</span></div>';
-        inspectorTitleEl.textContent = 'Canvas Inspector';
-        inspectorBodyEl.textContent = 'Select a supporting card to inspect it without replacing the current active decision.';
-        completionSurfaceEl.hidden = true;
-        completionHeroEl.innerHTML = '';
-        completionSectionGridEl.innerHTML = '';
-        completionPackageGridEl.innerHTML = '';
+        renderStageStrip(emptyView);
+        renderActiveStage(emptyView);
+        renderDecisionTree(emptyView, null);
+        renderContextPanel(emptyView);
+        renderCompletionSurface(emptyView);
         rootEl.innerHTML = (
           `<div class="empty-stage">` +
-            `<div class="panel-label">Current Decision</div>` +
-            `<h3>One question anchored in a workspace.</h3>` +
-            `<p>开始后，当前正式问题会成为 anchor card，最近步骤和结果会作为 supporting cards 挂在同一个 workspace 里。</p>` +
+            `<div class="panel-label">Active Node</div>` +
+            `<h3 class="active-stage-title">A workbench waits for a real problem.</h3>` +
+            `<p class="active-stage-copy">Start a new session and the current question will appear here, while the branch path and supporting context accumulate around it.</p>` +
           `</div>`
         );
       }
 
       function renderSessionList(items) {
         if (!items.length) {
-          sessionListEl.innerHTML = '<div class="session-item"><strong>No sessions yet</strong><span>Start a new brainstorm to populate this rail.</span></div>';
+          sessionListEl.innerHTML = '<div class="session-item"><strong>No sessions yet</strong><span>Start a topic to populate the workbench rail.</span></div>';
           return;
         }
 
@@ -1021,18 +1078,26 @@
           inspectedCardId
         });
 
-        setMainstageHeader(view, session);
+        setHeader(view, session);
         renderWorkspaceMode(view);
-        renderSupportingCards(view, session);
-        renderInspector(view);
+        renderStageStrip(view);
+        renderActiveStage(view);
+        renderDecisionTree(view, session);
+        renderContextPanel(view);
+        renderCompletionSurface(view);
 
         if (view.mode === 'completion' || view.mode === 'summary') {
-          rootEl.innerHTML = '<div class="empty-stage"><div class="panel-label">Completion Cluster</div><h3>The result now becomes the visible cluster.</h3><p>当前 workspace 已完成交付，仍可通过 supporting cards 回看路径，或直接从上方开始新的 brainstorm。</p></div>';
+          rootEl.innerHTML = (
+            `<div class="empty-stage">` +
+              `<div class="panel-label">Active Node</div>` +
+              `<h3 class="active-stage-title">${escapeHtml(view.currentDecision.title || 'Finished result')}</h3>` +
+              `<p class="active-stage-copy">${escapeHtml(view.currentDecision.description || 'Review the finished result and inspect the supporting package from the context panel.')}</p>` +
+            `</div>`
+          );
         } else {
           host.renderMessage(session.currentMessage);
         }
 
-        await renderCompletionSurface(view);
         await refreshSessionList();
       }
 

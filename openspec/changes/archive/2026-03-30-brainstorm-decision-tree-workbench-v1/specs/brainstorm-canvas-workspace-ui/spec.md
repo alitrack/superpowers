@@ -1,8 +1,5 @@
-# brainstorm-canvas-workspace-ui Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change brainstorm-canvas-workspace-v1. Update Purpose after archive.
-## Requirements
 ### Requirement: The browser SHALL present a dedicated brainstorming canvas workspace
 The browser brainstorming product SHALL present each active session inside a dedicated decision-tree workbench where the current active decision is rendered as the primary active node, and the surrounding branch path, sibling directions, checkpoints, and finished result nodes are visible as structured workspace context rather than as a flat set of supporting cards.
 
@@ -36,6 +33,8 @@ The browser brainstorming product SHALL allow users to inspect non-active tree n
 - **WHEN** the current session contains more branch history than the default workspace shows
 - **THEN** the browser reveals the additional prior path and checkpoint context through the workbench without replacing the active node during an in-progress session
 
+## ADDED Requirements
+
 ### Requirement: The decision tree SHALL be derived from existing session state without a new persistent tree schema
 The browser brainstorming product SHALL derive its visible decision-tree workbench from existing session data such as `currentMessage`, `history`, `workflow`, and available provenance fields, and V1 MUST fall back gracefully when some of those fields are sparse instead of introducing a new persistent tree or layout schema.
 
@@ -46,4 +45,3 @@ The browser brainstorming product SHALL derive its visible decision-tree workben
 #### Scenario: Richer session state is loaded
 - **WHEN** the session also includes history, checkpoints, or provenance-derived adjacent context
 - **THEN** the workbench expands the visible tree from those existing fields without inventing a separate V1 tree persistence model
-

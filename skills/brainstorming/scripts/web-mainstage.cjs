@@ -196,17 +196,219 @@
     return Array.isArray(synthesis.exploredDirections) ? synthesis.exploredDirections : [];
   }
 
-  function createSupportingCard(id, kind, title, body, options) {
+  function createWorkbenchNode(id, kind, title, body, options) {
     const resolved = options && typeof options === 'object' ? options : {};
     return {
       id,
       kind,
       title,
-      body,
+      body: body || '',
+      label: resolved.label || null,
       badge: resolved.badge || null,
-      isAnswerable: Boolean(resolved.isAnswerable),
-      inspectable: resolved.inspectable !== false,
-      previewText: resolved.previewText || null
+      previewText: resolved.previewText || body || null,
+      questionId: resolved.questionId || null,
+      depth: typeof resolved.depth === 'number' ? resolved.depth : 0,
+      status: resolved.status || 'context',
+      isActive: Boolean(resolved.isActive),
+      inspectable: resolved.inspectable !== false
+    };
+  }
+
+  function buildMetaPills(session, historyModel, workspaceMode) {
+    const pills = [];
+    const stage = session && session.workflow && session.workflow.visibleStage
+      ? session.workflow.visibleStage
+      : null;
+    if (stage && stage.title) {
+      pills.push(stage.title);
+    }
+    if (historyModel && typeof historyModel.totalCount === 'number') {
+      pills.push(`${historyModel.totalCount} completed step${historyModel.totalCount === 1 ? '' : 's'}`);
+    }
+    if (workspaceMode) {
+      pills.push(workspaceMode);
+    }
+    if (session && session.completionMode) {
+      pills.push(`${session.completionMode} mode`);
+    }
+    return pills;
+  }
+
+  function buildDecisionTree(session, mode, historyModel, supportingArtifact, completion, currentDecision, workspaceMode) {
+    const message = session && session.currentMessage && typeof session.currentMessage === 'object'
+      ? session.currentMessage
+      : {};
+    const visibleHistory = historyModel && Array.isArray(historyModel.visibleEntries)
+      ? historyModel.visibleEntries
+      : [];
+    const pathNodes = [];
+
+    pathNodes.push(createWorkbenchNode(
+      'root-topic',
+      'root-topic',
+      session && session.seedPrompt ? session.seedPrompt : 'Brainstorm topic',
+      session && session.seedPrompt
+        ? 'The seed prompt that started this session.'
+        : 'Start a session to create a visible branch path.',
+      {
+        badge: 'Topic',
+        label: 'Topic',
+        status: 'complete',
+        depth: 0
+      }
+    ));
+
+    visibleHistory.forEach((entry, index) => {
+      pathNodes.push(createWorkbenchNode(
+        `history-${entry.questionId || index + 1}`,
+        'recent-step',
+        entry.question || entry.questionId || `Step ${index + 1}`,
+        entry.answer || '',
+        {
+          badge: 'Answered',
+          label: `Step ${index + 1}`,
+          status: 'complete',
+          depth: index + 1,
+          questionId: entry.questionId || null
+        }
+      ));
+    });
+
+    let activeKind = 'active-decision';
+    if (mode === 'review') {
+      activeKind = 'review-decision';
+    } else if (mode === 'completion') {
+      activeKind = 'completion-cluster';
+    } else if (mode === 'summary') {
+      activeKind = 'summary-anchor';
+    } else if (mode === 'empty') {
+      activeKind = 'empty-anchor';
+    }
+
+    pathNodes.push(createWorkbenchNode(
+      `active-${message.questionId || mode || 'node'}`,
+      activeKind,
+      currentDecision.title,
+      currentDecision.description,
+      {
+        badge: mode === 'review'
+          ? 'Approval'
+          : (mode === 'completion' || mode === 'summary' ? 'Result' : 'Active'),
+        label: currentDecision.label,
+        status: mode === 'completion' || mode === 'summary' ? 'complete' : 'active',
+        depth: pathNodes.length,
+        isActive: true,
+        questionId: message.questionId || null,
+        inspectable: false
+      }
+    ));
+
+    const directions = extractSynthesisDirections(session).slice(0, workspaceMode === WORKSPACE_MODE_OVERVIEW ? 3 : 2);
+    const contextNodes = directions.map((direction, index) => createWorkbenchNode(
+      `direction-${index + 1}`,
+      'shortlisted-direction',
+      `Direction ${index + 1}`,
+      direction,
+      {
+        badge: 'Direction',
+        label: 'Adjacent path',
+        status: 'branch',
+        previewText: direction
+      }
+    ));
+
+    if (mode === 'review' && supportingArtifact) {
+      contextNodes.unshift(createWorkbenchNode(
+        'review-draft',
+        'review-draft',
+        supportingArtifact.title || 'Current draft',
+        supportingArtifact.previewText || 'Draft preview unavailable.',
+        {
+          badge: 'Draft',
+          label: 'Checkpoint draft',
+          status: 'checkpoint',
+          previewText: supportingArtifact.previewText || ''
+        }
+      ));
+    }
+
+    const resultNodes = completion
+      ? completion.sections.map((section, index) => createWorkbenchNode(
+          `result-${section.id || slugify(section.title || `section-${index + 1}`)}`,
+          'result-section',
+          section.title || 'Result section',
+          Array.isArray(section.items) ? section.items.join('\n') : '',
+          {
+            badge: 'Result',
+            label: 'Finished result',
+            status: 'complete',
+            previewText: Array.isArray(section.items) ? section.items.join('\n') : ''
+          }
+        ))
+      : [];
+
+    return {
+      rootLabel: session && session.seedPrompt ? session.seedPrompt : 'Brainstorm topic',
+      hiddenCount: historyModel ? historyModel.hiddenCount : 0,
+      pathNodes,
+      contextNodes,
+      resultNodes
+    };
+  }
+
+  function buildContextPanel(decisionTree, completion, stage) {
+    const preferredNodes = []
+      .concat(Array.isArray(decisionTree && decisionTree.contextNodes) ? decisionTree.contextNodes : [])
+      .concat(Array.isArray(decisionTree && decisionTree.resultNodes) ? decisionTree.resultNodes : []);
+    const pathNodes = Array.isArray(decisionTree && decisionTree.pathNodes) ? decisionTree.pathNodes : [];
+    const inspectableNodes = preferredNodes.concat(pathNodes);
+    const selectedNode = inspectableNodes.find((node) => node.id === (decisionTree && decisionTree.selectedNodeId))
+      || preferredNodes[0]
+      || pathNodes[0]
+      || null;
+    const sections = [];
+
+    if (selectedNode) {
+      sections.push({
+        id: 'selected-node',
+        kind: 'selected-node',
+        title: selectedNode.title || 'Selected node',
+        body: selectedNode.previewText || selectedNode.body || ''
+      });
+    } else {
+      sections.push({
+        id: 'selected-node',
+        kind: 'selected-node',
+        title: 'Selected node',
+        body: 'Select a branch node, checkpoint, or result section to inspect it here.'
+      });
+    }
+
+    if (completion) {
+      completion.sections.forEach((section) => {
+        sections.push({
+          id: `section-${section.id || slugify(section.title || 'section')}`,
+          kind: 'result-section',
+          title: section.title || 'Result section',
+          body: Array.isArray(section.items) ? section.items.join('\n') : ''
+        });
+      });
+    } else if (stage && stage.description) {
+      sections.push({
+        id: 'stage-context',
+        kind: 'stage-context',
+        title: stage.title || 'Current stage',
+        body: stage.description
+      });
+    }
+
+    return {
+      selectedNodeId: selectedNode ? selectedNode.id : null,
+      selectedNode,
+      sections,
+      packageItems: completion && Array.isArray(completion.supportingArtifacts)
+        ? completion.supportingArtifacts
+        : []
     };
   }
 
@@ -218,97 +420,41 @@
     const message = session && session.currentMessage && typeof session.currentMessage === 'object'
       ? session.currentMessage
       : {};
-
-    const supportingCards = historyModel.visibleEntries.map((entry, index) => createSupportingCard(
-      `history-${entry.questionId || index + 1}`,
-      'recent-step',
-      entry.question || entry.questionId || `Step ${index + 1}`,
-      entry.answer || '',
-      { badge: 'Recent Step' }
-    ));
-
-    const directions = extractSynthesisDirections(session).slice(0, workspaceMode === WORKSPACE_MODE_OVERVIEW ? 3 : 2);
-    directions.forEach((direction, index) => {
-      supportingCards.push(createSupportingCard(
-        `direction-${index + 1}`,
-        'shortlisted-direction',
-        `Direction ${index + 1}`,
-        direction,
-        { badge: 'Direction' }
-      ));
-    });
-
-    if (mode === 'review' && supportingArtifact) {
-      supportingCards.push(createSupportingCard(
-        'review-draft',
-        'review-draft',
-        supportingArtifact.title || 'Current draft',
-        supportingArtifact.previewText || 'Draft preview unavailable.',
-        { badge: 'Draft', previewText: supportingArtifact.previewText || '' }
-      ));
-    }
-
-    let anchorKind = 'active-decision';
-    if (mode === 'review') {
-      anchorKind = 'review-decision';
-    } else if (mode === 'completion') {
-      anchorKind = 'completion-cluster';
-    } else if (mode === 'summary') {
-      anchorKind = 'summary-anchor';
-    } else if (mode === 'empty') {
-      anchorKind = 'empty-anchor';
-    }
-
-    const completionCluster = completion
-      ? {
-          title: completion.title,
-          description: completion.description,
-          cards: completion.sections.map((section) => createSupportingCard(
-            `section-${section.id || slugify(section.title || 'result')}`,
-            'result-section',
-            section.title || 'Section',
-            Array.isArray(section.items) ? section.items.join('\n') : '',
-            {
-              badge: 'Result',
-              previewText: Array.isArray(section.items) ? section.items.join('\n') : ''
-            }
-          )).concat(completion.supportingArtifacts.map((artifact) => createSupportingCard(
-            `artifact-${artifact.kind}`,
-            artifact.kind === 'bundle'
-              ? 'result-bundle'
-              : (artifact.kind === 'spec' ? 'design-spec' : 'implementation-plan'),
-            artifact.title || artifact.label || artifact.kind,
-            artifact.previewText || artifact.path || '',
-            {
-              badge: artifact.label || (artifact.kind === 'spec' ? 'Spec' : artifact.kind === 'plan' ? 'Plan' : 'Bundle'),
-              previewText: artifact.path || artifact.previewText || ''
-            }
-          )))
-        }
+    const stage = session && session.workflow && session.workflow.visibleStage
+      ? session.workflow.visibleStage
       : null;
-
-    const selectedCard = supportingCards.find((card) => card.id === resolvedOptions.inspectedCardId) || null;
+    const decisionTree = buildDecisionTree(
+      session,
+      mode,
+      historyModel,
+      supportingArtifact,
+      completion,
+      currentDecision,
+      workspaceMode
+    );
+    decisionTree.selectedNodeId = resolvedOptions.inspectedCardId || null;
+    const contextPanel = buildContextPanel(decisionTree, completion, stage);
 
     return {
       mode: workspaceMode,
-      anchorCard: {
-        kind: anchorKind,
+      activeStage: {
+        kind: decisionTree.pathNodes.length > 0
+          ? decisionTree.pathNodes[decisionTree.pathNodes.length - 1].kind
+          : 'empty-anchor',
+        label: currentDecision.label,
         title: currentDecision.title,
         description: currentDecision.description,
         questionId: message.questionId || null,
-        isAnswerable: mode === 'question' || mode === 'review'
+        isAnswerable: mode === 'question' || mode === 'review',
+        metaPills: buildMetaPills(session, historyModel, workspaceMode)
       },
-      supportingCards,
-      completionCluster,
+      decisionTree,
+      contextPanel,
       dock: {
         hasNewBrainstormEntry: true,
         hasFullHistoryEntry: historyModel.canExpand || historyModel.expanded,
         canToggleWorkspaceMode: true,
         workspaceMode
-      },
-      inspector: {
-        selectedCardId: selectedCard ? selectedCard.id : null,
-        selectedCard
       }
     };
   }

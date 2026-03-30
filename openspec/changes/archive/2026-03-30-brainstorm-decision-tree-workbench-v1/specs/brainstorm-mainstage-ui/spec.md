@@ -1,8 +1,5 @@
-# brainstorm-mainstage-ui Specification
+## MODIFIED Requirements
 
-## Purpose
-Define how the browser brainstorming workspace keeps the current active decision dominant while presenting history, review checkpoints, and finished results with clear visual hierarchy.
-## Requirements
 ### Requirement: The browser mainstage SHALL keep the current active decision as the dominant focus
 The browser brainstorming product SHALL make the current active branch node the dominant visual focus of the workbench mainstage instead of giving equal weight to the surrounding tree, stage strip, or context panels.
 
@@ -40,6 +37,8 @@ The browser brainstorming product SHALL present the finished session inside the 
 - **WHEN** the user wants to begin a new brainstorm while viewing a completed session
 - **THEN** the fresh-topic entry path remains clearly available as a secondary workspace action without hiding or overwriting the completed result by default
 
+## ADDED Requirements
+
 ### Requirement: The browser mainstage SHALL keep the new-session entry secondary while a session is active
 The browser brainstorming product SHALL keep the entry for starting another brainstorm available inside the workbench, but it MUST remain visually secondary to the active session and MUST NOT reclaim the mainstage while an in-progress or completed session is being viewed.
 
@@ -50,4 +49,3 @@ The browser brainstorming product SHALL keep the entry for starting another brai
 #### Scenario: Completed session is active
 - **WHEN** the user is reviewing a finished result inside the workbench
 - **THEN** the new-session entry remains available for starting another topic without replacing the finished-result surface as the dominant content
-
