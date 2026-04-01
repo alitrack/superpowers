@@ -6,8 +6,14 @@ const path = require('path');
 const MANAGER_PATH = path.join(__dirname, '../../skills/brainstorming/scripts/web-session-manager.cjs');
 
 let createSessionManager;
+let DEFAULT_RUNTIME_CREATE_TIMEOUT_MS;
+let DEFAULT_RUNTIME_SUBMIT_TIMEOUT_MS;
 try {
-  ({ createSessionManager } = require(MANAGER_PATH));
+  ({
+    createSessionManager,
+    DEFAULT_RUNTIME_CREATE_TIMEOUT_MS,
+    DEFAULT_RUNTIME_SUBMIT_TIMEOUT_MS
+  } = require(MANAGER_PATH));
 } catch (error) {
   console.error(`Cannot load ${MANAGER_PATH}: ${error.message}`);
   process.exit(1);
@@ -16,6 +22,34 @@ try {
 async function runTests() {
   let passed = 0;
   let failed = 0;
+
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  async function waitForSession(manager, sessionId, predicate, timeoutMs = 2000, intervalMs = 20) {
+    const deadline = Date.now() + timeoutMs;
+    let lastSession = null;
+    while (Date.now() < deadline) {
+      lastSession = manager.getSession(sessionId);
+      if (predicate(lastSession)) {
+        return lastSession;
+      }
+      await sleep(intervalMs);
+    }
+    throw new Error(`Timed out waiting for session ${sessionId}: ${JSON.stringify(lastSession, null, 2)}`);
+  }
+
+  async function waitForCondition(predicate, timeoutMs = 2000, intervalMs = 20) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (predicate()) {
+        return;
+      }
+      await sleep(intervalMs);
+    }
+    throw new Error('Timed out waiting for condition');
+  }
 
   async function test(name, fn) {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainstorm-web-session-'));
@@ -33,6 +67,13 @@ async function runTests() {
   }
 
   console.log('\n--- Web Session Manager ---');
+
+  await test('uses production-safe default runtime timeouts for real Codex backends', async () => {
+    assert.strictEqual(typeof DEFAULT_RUNTIME_CREATE_TIMEOUT_MS, 'number');
+    assert.strictEqual(typeof DEFAULT_RUNTIME_SUBMIT_TIMEOUT_MS, 'number');
+    assert(DEFAULT_RUNTIME_CREATE_TIMEOUT_MS >= 45000);
+    assert(DEFAULT_RUNTIME_SUBMIT_TIMEOUT_MS >= 45000);
+  });
 
   await test('creates isolated sessions with distinct ids', async (tmpDir) => {
     const runtimeAdapter = {
@@ -61,6 +102,8 @@ async function runTests() {
 
     assert.notStrictEqual(first.id, second.id);
     assert.strictEqual(first.backendMode, 'exec');
+    assert.strictEqual(first.workflowMode, 'conversation');
+    assert.strictEqual(second.workflowMode, 'conversation');
     assert.strictEqual(first.currentMessage.questionId, 'topic');
     assert.strictEqual(second.currentMessage.questionId, 'topic');
   });
@@ -118,6 +161,382 @@ async function runTests() {
     assert.strictEqual(reloaded.providerSession.threadId, 'thread-1');
     assert.strictEqual(reloaded.currentMessage.type, 'summary');
     assert.strictEqual(reloaded.history.length, 1);
+  });
+
+  await test('backgroundProcessing creates a provisional session before the first runtime question is ready', async (tmpDir) => {
+    let releaseCreate = null;
+    const runtimeAdapter = {
+      createSession(input) {
+        return new Promise((resolve) => {
+          releaseCreate = () => resolve({
+            sessionId: input.sessionId,
+            backendMode: 'exec',
+            providerSession: { transcriptId: `transcript-${input.sessionId}` },
+            currentQuestionId: 'topic',
+            history: [],
+            currentMessage: {
+              type: 'question',
+              questionType: 'ask_text',
+              questionId: 'topic',
+              title: 'What do you want to brainstorm about?',
+              description: 'Start with the core topic.',
+              options: [],
+              allowTextOverride: true
+            }
+          });
+        });
+      }
+    };
+
+    const manager = createSessionManager({
+      dataDir: tmpDir,
+      runtimeAdapter,
+      backgroundProcessing: true
+    });
+
+    const session = await manager.createSession({
+      completionMode: 'summary',
+      initialPrompt: 'A background-first brainstorming session'
+    });
+
+    assert.strictEqual(session.processing.state, 'running');
+    assert.strictEqual(session.processing.action, 'create');
+    assert.strictEqual(session.currentMessage, null);
+
+    await waitForCondition(() => typeof releaseCreate === 'function');
+    releaseCreate();
+    const ready = await waitForSession(manager, session.id, (current) => (
+      current.processing.state === 'idle'
+      && current.currentMessage
+      && current.currentMessage.questionId === 'topic'
+    ));
+    assert.strictEqual(ready.currentMessage.questionId, 'topic');
+  });
+
+  await test('backgroundProcessing freezes the current question until the submit turn completes', async (tmpDir) => {
+    let releaseSubmit = null;
+    const runtimeAdapter = {
+      async createSession(input) {
+        return {
+          sessionId: input.sessionId,
+          backendMode: 'exec',
+          providerSession: { transcriptId: `transcript-${input.sessionId}` },
+          currentQuestionId: 'topic',
+          history: [],
+          currentMessage: {
+            type: 'question',
+            questionType: 'ask_text',
+            questionId: 'topic',
+            title: 'What do you want to brainstorm about?',
+            description: 'Start with the core topic.',
+            options: [],
+            allowTextOverride: true
+          }
+        };
+      },
+      submitAnswer(snapshot, answer) {
+        return new Promise((resolve) => {
+          releaseSubmit = () => resolve({
+            ...snapshot,
+            history: [{ questionId: 'topic', question: 'What do you want to brainstorm about?', answer: answer.text }],
+            currentQuestionId: 'goal',
+            currentMessage: {
+              type: 'question',
+              questionType: 'pick_one',
+              questionId: 'goal',
+              title: 'Primary outcome',
+              description: '',
+              options: [
+                { id: 'clarity', label: 'Clarify the idea', description: '' },
+                { id: 'plan', label: 'Turn it into a plan', description: '' }
+              ],
+              allowTextOverride: true
+            }
+          });
+        });
+      }
+    };
+
+    const manager = createSessionManager({
+      dataDir: tmpDir,
+      runtimeAdapter,
+      backgroundProcessing: true
+    });
+
+    const provisional = await manager.createSession({ completionMode: 'summary' });
+    const ready = await waitForSession(manager, provisional.id, (current) => (
+      current.currentMessage && current.currentMessage.questionId === 'topic'
+    ));
+
+    const ack = await manager.submitAnswer(ready.id, {
+      type: 'answer',
+      questionId: 'topic',
+      answerMode: 'text',
+      optionIds: [],
+      text: 'A visual brainstorming assistant',
+      rawInput: 'A visual brainstorming assistant'
+    });
+
+    assert.strictEqual(ack.processing.state, 'running');
+    assert.strictEqual(ack.processing.action, 'submit');
+    assert.strictEqual(ack.currentMessage.questionId, 'topic');
+
+    const during = manager.getSession(ready.id);
+    assert.strictEqual(during.currentMessage.questionId, 'topic');
+    assert.strictEqual(during.processing.state, 'running');
+
+    await waitForCondition(() => typeof releaseSubmit === 'function');
+    releaseSubmit();
+    const completed = await waitForSession(manager, ready.id, (current) => (
+      current.processing.state === 'idle'
+      && current.currentMessage
+      && current.currentMessage.questionId === 'goal'
+    ));
+    assert.strictEqual(completed.history.length, 1);
+    assert.strictEqual(completed.currentMessage.questionId, 'goal');
+  });
+
+  await test('backgroundProcessing rejects duplicate submits while a session is already running another turn', async (tmpDir) => {
+    let releaseSubmit = null;
+    const runtimeAdapter = {
+      async createSession(input) {
+        return {
+          sessionId: input.sessionId,
+          backendMode: 'exec',
+          providerSession: { transcriptId: `transcript-${input.sessionId}` },
+          currentQuestionId: 'topic',
+          history: [],
+          currentMessage: {
+            type: 'question',
+            questionType: 'ask_text',
+            questionId: 'topic',
+            title: 'What do you want to brainstorm about?',
+            description: 'Start with the core topic.',
+            options: [],
+            allowTextOverride: true
+          }
+        };
+      },
+      submitAnswer(snapshot, answer) {
+        return new Promise((resolve) => {
+          releaseSubmit = () => resolve({
+            ...snapshot,
+            history: [{ questionId: 'topic', question: 'What do you want to brainstorm about?', answer: answer.text }],
+            currentQuestionId: null,
+            currentMessage: {
+              type: 'summary',
+              text: answer.text,
+              answers: [{ questionId: 'topic', answer: answer.text }]
+            }
+          });
+        });
+      }
+    };
+
+    const manager = createSessionManager({
+      dataDir: tmpDir,
+      runtimeAdapter,
+      backgroundProcessing: true
+    });
+
+    const provisional = await manager.createSession({ completionMode: 'summary' });
+    const ready = await waitForSession(manager, provisional.id, (current) => (
+      current.currentMessage && current.currentMessage.questionId === 'topic'
+    ));
+
+    await manager.submitAnswer(ready.id, {
+      type: 'answer',
+      questionId: 'topic',
+      answerMode: 'text',
+      optionIds: [],
+      text: 'First turn',
+      rawInput: 'First turn'
+    });
+
+    await assert.rejects(
+      () => manager.submitAnswer(ready.id, {
+        type: 'answer',
+        questionId: 'topic',
+        answerMode: 'text',
+        optionIds: [],
+        text: 'Duplicate turn',
+        rawInput: 'Duplicate turn'
+      }),
+      /already processing another turn/
+    );
+
+    await waitForCondition(() => typeof releaseSubmit === 'function');
+    releaseSubmit();
+    await waitForSession(manager, ready.id, (current) => current.processing.state === 'idle');
+  });
+
+  await test('backgroundProcessing re-enqueues a running submit job after manager restart', async (tmpDir) => {
+    const initialRuntimeAdapter = {
+      async createSession(input) {
+        return {
+          sessionId: input.sessionId,
+          backendMode: 'app-server',
+          providerSession: { threadId: 'thread-background-restart', pendingRequestId: null },
+          currentQuestionId: 'topic',
+          history: [],
+          currentMessage: {
+            type: 'question',
+            questionType: 'ask_text',
+            questionId: 'topic',
+            title: 'What do you want to brainstorm about?',
+            description: 'Start with the core topic.',
+            options: [],
+            allowTextOverride: true
+          }
+        };
+      },
+      submitAnswer() {
+        return new Promise(() => {});
+      }
+    };
+
+    const firstManager = createSessionManager({
+      dataDir: tmpDir,
+      runtimeAdapter: initialRuntimeAdapter,
+      backgroundProcessing: true
+    });
+    const provisional = await firstManager.createSession({ completionMode: 'summary' });
+    const ready = await waitForSession(firstManager, provisional.id, (current) => (
+      current.currentMessage && current.currentMessage.questionId === 'topic'
+    ));
+
+    await firstManager.submitAnswer(ready.id, {
+      type: 'answer',
+      questionId: 'topic',
+      answerMode: 'text',
+      optionIds: [],
+      text: 'Recover after restart',
+      rawInput: 'Recover after restart'
+    });
+
+    const resumedRuntimeAdapter = {
+      async createSession() {
+        throw new Error('createSession should not be called during submit recovery');
+      },
+      async submitAnswer(snapshot, answer) {
+        return {
+          ...snapshot,
+          history: [{ questionId: 'topic', question: 'What do you want to brainstorm about?', answer: answer.text }],
+          currentQuestionId: null,
+          currentMessage: {
+            type: 'summary',
+            title: 'Recovered session',
+            text: 'Recovered after manager restart.',
+            answers: [{ questionId: 'topic', answer: answer.text }]
+          }
+        };
+      }
+    };
+
+    const reloadedManager = createSessionManager({
+      dataDir: tmpDir,
+      runtimeAdapter: resumedRuntimeAdapter,
+      backgroundProcessing: true
+    });
+
+    const running = reloadedManager.getSession(ready.id);
+    assert.strictEqual(running.processing.state, 'running');
+
+    const completed = await waitForSession(reloadedManager, ready.id, (current) => (
+      current.processing.state === 'idle'
+      && current.currentMessage
+      && current.currentMessage.type === 'summary'
+    ));
+    assert.strictEqual(completed.currentMessage.title, 'Recovered session');
+    assert.strictEqual(completed.history.length, 1);
+  });
+
+  await test('backgroundProcessing persists submit failures without discarding the current question', async (tmpDir) => {
+    const runtimeAdapter = {
+      async createSession(input) {
+        return {
+          sessionId: input.sessionId,
+          backendMode: 'exec',
+          providerSession: { transcriptId: `transcript-${input.sessionId}` },
+          currentQuestionId: 'topic',
+          history: [],
+          currentMessage: {
+            type: 'question',
+            questionType: 'ask_text',
+            questionId: 'topic',
+            title: 'What do you want to brainstorm about?',
+            description: 'Start with the core topic.',
+            options: [],
+            allowTextOverride: true
+          }
+        };
+      },
+      async submitAnswer() {
+        const error = new Error('runtime submitAnswer timed out after 12345ms');
+        error.code = 'RUNTIME_TIMEOUT';
+        throw error;
+      }
+    };
+
+    const manager = createSessionManager({
+      dataDir: tmpDir,
+      runtimeAdapter,
+      backgroundProcessing: true
+    });
+
+    const provisional = await manager.createSession({ completionMode: 'summary' });
+    const ready = await waitForSession(manager, provisional.id, (current) => (
+      current.currentMessage && current.currentMessage.questionId === 'topic'
+    ));
+
+    await manager.submitAnswer(ready.id, {
+      type: 'answer',
+      questionId: 'topic',
+      answerMode: 'text',
+      optionIds: [],
+      text: 'A visual brainstorming assistant',
+      rawInput: 'A visual brainstorming assistant'
+    });
+
+    const failed = await waitForSession(manager, ready.id, (current) => (
+      current.processing.state === 'failed'
+    ));
+    assert.strictEqual(failed.currentMessage.questionId, 'topic');
+    assert.strictEqual(failed.processing.error.code, 'RUNTIME_TIMEOUT');
+    assert(/timed out/.test(failed.processing.error.message));
+  });
+
+  await test('deletes a persisted session and removes it from the session list', async (tmpDir) => {
+    const runtimeAdapter = {
+      async createSession(input) {
+        return {
+          sessionId: input.sessionId,
+          backendMode: 'exec',
+          providerSession: { transcriptId: `transcript-${input.sessionId}` },
+          currentQuestionId: 'topic',
+          history: [],
+          currentMessage: {
+            type: 'question',
+            questionType: 'ask_text',
+            questionId: 'topic',
+            title: 'What do you want to brainstorm about?',
+            description: 'Start with the core topic.',
+            options: [],
+            allowTextOverride: true
+          }
+        };
+      }
+    };
+
+    const manager = createSessionManager({ dataDir: tmpDir, runtimeAdapter });
+    const session = await manager.createSession({ completionMode: 'summary' });
+    assert.strictEqual(manager.listSessions().length, 1);
+
+    const result = manager.deleteSession(session.id);
+    assert.strictEqual(result.id, session.id);
+    assert.strictEqual(result.deleted, true);
+    assert.strictEqual(manager.listSessions().length, 0);
+    assert.throws(() => manager.getSession(session.id), /Unknown session/);
   });
 
   await test('persists facilitation strategy state and passes it back into later turns', async (tmpDir) => {
@@ -266,11 +685,163 @@ async function runTests() {
     assert.strictEqual(receivedInitialPrompt, 'We have a brainstorming tool, but it still feels like a form.');
     assert.strictEqual(session.seedPrompt, 'We have a brainstorming tool, but it still feels like a form.');
     assert.strictEqual(session.currentMessage.questionId, 'seed-reframe');
+    assert(session.nodeLog, 'expected immutable node log');
+    assert.strictEqual(session.nodeLog.activeNodeId, 'question-seed-reframe');
+    assert(session.nodeLog.nodes.some((node) => node.id === 'question-seed-reframe'));
+    assert(session.nodeLog.nodes.some((node) => node.id === 'topic-root'));
 
     const reloadedManager = createSessionManager({ dataDir: tmpDir, runtimeAdapter });
     const reloaded = reloadedManager.getSession(session.id);
     assert.strictEqual(reloaded.seedPrompt, 'We have a brainstorming tool, but it still feels like a form.');
     assert.strictEqual(reloaded.strategyState.phase, 'reframe');
+    assert.strictEqual(reloaded.nodeLog.activeNodeId, 'question-seed-reframe');
+  });
+
+  await test('materializes branch runs explicitly and routes answers through the selected branch context', async (tmpDir) => {
+    const runtimeAdapter = {
+      async createSession(input) {
+        return {
+          sessionId: input.sessionId,
+          backendMode: 'app-server',
+          providerSession: { threadId: 'thread-branches-1', pendingRequestId: null },
+          currentQuestionId: 'seed-directions',
+          strategyState: {
+            phase: 'diverge',
+            nextLearningGoal: 'generate-distinct-directions',
+            problemFrame: { summary: input.initialPrompt || 'Topic' },
+            candidateDirections: [],
+            shortlistedDirections: [],
+            selectionCriteria: [],
+            selectedCriterion: null,
+            selectedPath: null,
+            branchRuns: [],
+            selectedBranchRunId: null,
+            decisionTrail: [
+              { kind: 'topic', value: input.initialPrompt || 'Topic' }
+            ]
+          },
+          history: [],
+          currentMessage: {
+            type: 'question',
+            questionType: 'pick_many',
+            questionId: 'seed-directions',
+            title: 'Which directions are worth exploring as serious paths?',
+            description: '',
+            options: [
+              { id: 'facilitation-engine', label: 'Dynamic facilitation engine', description: '' },
+              { id: 'interaction-redesign', label: 'Interaction model redesign', description: '' },
+              { id: 'decision-workflow', label: 'Decision-quality workflow', description: '' }
+            ],
+            allowTextOverride: true,
+            branching: {
+              branchable: true,
+              materializeActionLabel: 'Explore selected as branches',
+              minOptionCount: 2
+            }
+          }
+        };
+      },
+      async submitAnswer(snapshot, answer) {
+        return {
+          ...snapshot,
+          history: [
+            {
+              questionId: 'seed-directions',
+              question: 'Which directions are worth exploring as serious paths?',
+              answer: answer.optionIds.join(', ')
+            }
+          ],
+          currentQuestionId: 'seed-criterion',
+          strategyState: {
+            ...snapshot.strategyState,
+            phase: 'converge',
+            nextLearningGoal: 'choose-the-most-important-decision-criterion',
+            shortlistedDirections: [
+              { id: 'facilitation-engine', label: 'Dynamic facilitation engine', description: '' },
+              { id: 'interaction-redesign', label: 'Interaction model redesign', description: '' }
+            ]
+          },
+          currentMessage: {
+            type: 'question',
+            questionType: 'pick_one',
+            questionId: 'seed-criterion',
+            title: 'Which criterion should decide the winner?',
+            description: '',
+            options: [
+              { id: 'clarity', label: 'Most user clarity', description: '' },
+              { id: 'speed', label: 'Fastest path to value', description: '' }
+            ],
+            allowTextOverride: true
+          }
+        };
+      }
+    };
+
+    const manager = createSessionManager({ dataDir: tmpDir, runtimeAdapter });
+    const session = await manager.createSession({
+      completionMode: 'artifact',
+      initialPrompt: 'How should this product become a real brainstorming workspace?'
+    });
+
+    const materialized = await manager.submitAnswer(session.id, {
+      type: 'branch_materialize',
+      questionId: 'seed-directions',
+      optionIds: ['facilitation-engine', 'interaction-redesign'],
+      text: null,
+      rawInput: '1,2'
+    });
+
+    assert.strictEqual(materialized.currentMessage.questionId, 'seed-criterion');
+    assert.strictEqual(materialized.strategyState.branchRuns.length, 2);
+    assert.strictEqual(materialized.strategyState.selectedBranchRunId, null);
+    assert.strictEqual(materialized.strategyState.branchRuns[0].currentMessage.questionType, 'ask_text');
+    assert(materialized.roundGraph, 'expected round graph to persist on session');
+    assert(materialized.nodeLog, 'expected immutable node log');
+    assert.strictEqual(materialized.roundGraph.activeRoundId, 'round-seed-criterion');
+    assert(materialized.roundGraph.rounds.some((round) => round.id === 'round-seed-directions'));
+    assert(materialized.roundGraph.rounds.some((round) => round.id === 'round-seed-criterion'));
+    assert(materialized.roundGraph.rounds.some((round) => round.id === 'branch-run-seed-directions-facilitation-engine'));
+    assert(materialized.nodeLog.nodes.some((node) => node.id === 'question-seed-directions'));
+    assert(materialized.nodeLog.nodes.some((node) => node.id === 'question-seed-criterion'));
+    assert(materialized.nodeLog.nodes.some((node) => node.id === 'question-branch-run-seed-directions-facilitation-engine-detail'));
+    assert(materialized.nodeLog.nodes.some((node) => node.id === 'question-branch-run-seed-directions-interaction-redesign-detail'));
+    const sourceQuestionNode = materialized.nodeLog.nodes.find((node) => node.id === 'question-seed-directions');
+    assert.strictEqual(sourceQuestionNode.title, 'Which directions are worth exploring as serious paths?');
+
+    const switched = manager.selectSessionBranchContext(session.id, 'branch-run-seed-directions-interaction-redesign');
+    assert.strictEqual(switched.strategyState.selectedBranchRunId, 'branch-run-seed-directions-interaction-redesign');
+    assert.strictEqual(switched.roundGraph.activeRoundId, 'branch-run-seed-directions-interaction-redesign');
+    assert.strictEqual(switched.nodeLog.activeNodeId, 'question-branch-run-seed-directions-interaction-redesign-detail');
+
+    const reloadedManager = createSessionManager({ dataDir: tmpDir, runtimeAdapter });
+    const reloaded = reloadedManager.getSession(session.id);
+    assert.strictEqual(reloaded.strategyState.selectedBranchRunId, 'branch-run-seed-directions-interaction-redesign');
+    assert.strictEqual(reloaded.roundGraph.activeRoundId, 'branch-run-seed-directions-interaction-redesign');
+    assert.strictEqual(reloaded.nodeLog.activeNodeId, 'question-branch-run-seed-directions-interaction-redesign-detail');
+
+    const branched = await manager.submitAnswer(session.id, {
+      type: 'answer',
+      questionId: 'branch-run-seed-directions-interaction-redesign-detail',
+      answerMode: 'text',
+      optionIds: [],
+      text: 'Turn this branch into a concrete interaction lane with visible facilitator moves.',
+      rawInput: 'Turn this branch into a concrete interaction lane with visible facilitator moves.'
+    });
+
+    const completedBranch = branched.strategyState.branchRuns.find((branchRun) => branchRun.id === 'branch-run-seed-directions-interaction-redesign');
+    const untouchedBranch = branched.strategyState.branchRuns.find((branchRun) => branchRun.id === 'branch-run-seed-directions-facilitation-engine');
+    assert(completedBranch, 'expected completed branch run');
+    assert.strictEqual(completedBranch.status, 'complete');
+    assert.strictEqual(completedBranch.history.length, 1);
+    assert(completedBranch.resultSummary.text.includes('interaction lane'));
+    assert(untouchedBranch, 'expected sibling branch run');
+    assert.notStrictEqual(untouchedBranch.status, 'complete');
+    assert.strictEqual(branched.currentMessage.questionId, 'seed-criterion');
+
+    const returned = manager.selectSessionBranchContext(session.id, null);
+    assert.strictEqual(returned.strategyState.selectedBranchRunId, null);
+    assert.strictEqual(returned.roundGraph.activeRoundId, 'round-seed-criterion');
+    assert.strictEqual(returned.nodeLog.activeNodeId, 'question-seed-criterion');
   });
 
   await test('creates a real artifact for artifact-mode sessions', async (tmpDir) => {
@@ -336,16 +907,224 @@ async function runTests() {
     });
 
     assert.strictEqual(completed.currentMessage.type, 'artifact_ready');
+    assert.strictEqual(completed.currentMessage.title, 'Recommendation: Guided question flow');
     assert(completed.artifact, 'artifact metadata should be persisted');
     assert(fs.existsSync(completed.artifact.filePath), 'artifact file should exist');
     const artifactText = fs.readFileSync(completed.artifact.filePath, 'utf-8');
-    assert(artifactText.includes('Structured Brainstorming Result'));
+    assert(artifactText.includes('# Recommendation: Guided question flow'));
+    assert(!artifactText.includes('Spec and Plan Bundle'));
     assert(artifactText.includes('## Recommendation'));
     assert(artifactText.includes('## Explored Approaches'));
     assert(artifactText.includes('## Design / Execution Draft'));
     assert(artifactText.includes('## Risks / Open Questions'));
     assert(artifactText.includes('## Next Actions'));
     assert(artifactText.includes('## Why This Path Currently Wins'));
+  });
+
+  await test('ordinary artifact sessions keep runtime-facing export semantics for non-software prompts', async (tmpDir) => {
+    const runtimeAdapter = {
+      async createSession(input) {
+        return {
+          sessionId: input.sessionId,
+          backendMode: 'exec',
+          providerSession: { transcriptId: `transcript-${input.sessionId}` },
+          currentQuestionId: 'topic',
+          history: [],
+          currentMessage: {
+            type: 'question',
+            questionType: 'ask_text',
+            questionId: 'topic',
+            title: '本轮要先收敛什么？',
+            description: '先说明要形成什么写作结果。',
+            options: [],
+            allowTextOverride: true
+          }
+        };
+      },
+      async submitAnswer(snapshot, answer) {
+        return {
+          ...snapshot,
+          history: [{ questionId: 'topic', question: '本轮要先收敛什么？', answer: answer.text }],
+          currentQuestionId: null,
+          currentMessage: {
+            type: 'summary',
+            title: '浙江省水利厅公务员队伍能力提升文章提纲',
+            text: '围绕政治对标、短板诊断、政策建议形成三段式文章提纲。',
+            path: ['topic'],
+            answers: [{ questionId: 'topic', question: '本轮要先收敛什么？', answer: answer.text }],
+            deliverable: {
+              isComplete: true,
+              completionGateVersion: 'finished-deliverable-v1',
+              sections: [
+                { id: 'title', title: '文章标题', items: ['浙江省水利厅公务员队伍能力提升研究'] },
+                { id: 'outline', title: '写作提纲', items: ['开篇对标总书记和省委省政府部署', '分析队伍短板', '提出政策建议'] },
+                { id: 'sources', title: '参考依据', items: ['后续补充正式出处核验清单'] }
+              ]
+            }
+          }
+        };
+      }
+    };
+
+    const manager = createSessionManager({ dataDir: tmpDir, runtimeAdapter });
+    const session = await manager.createSession({
+      completionMode: 'artifact',
+      initialPrompt: '写一篇关于浙江省水利厅公务员队伍能力提升的文章'
+    });
+
+    const completed = await manager.submitAnswer(session.id, {
+      type: 'answer',
+      questionId: 'topic',
+      answerMode: 'text',
+      optionIds: [],
+      text: '先形成文章提纲',
+      rawInput: '先形成文章提纲'
+    });
+
+    assert.strictEqual(completed.workflowMode, 'conversation');
+    assert.strictEqual(completed.currentMessage.type, 'artifact_ready');
+    assert.strictEqual(completed.currentMessage.title, '浙江省水利厅公务员队伍能力提升文章提纲');
+    const finishedResult = manager.getFinishedResult(session.id);
+    assert.strictEqual(finishedResult.title, '浙江省水利厅公务员队伍能力提升文章提纲');
+    assert.strictEqual(finishedResult.supportingArtifacts.length, 1);
+    assert.strictEqual(finishedResult.supportingArtifacts[0].label, 'Current Artifact');
+
+    const markdown = manager.getFinishedResultMarkdown(session.id);
+    assert(markdown.includes('# 浙江省水利厅公务员队伍能力提升文章提纲'));
+    assert(markdown.includes('## 写作提纲'));
+    assert(!markdown.includes('Structured Brainstorming Result'));
+    assert(!markdown.includes('Spec and Plan Bundle'));
+  });
+
+  await test('artifact_ready with generic metadata still derives the finished result from the real artifact markdown body', async (tmpDir) => {
+    const runtimeAdapter = {
+      async createSession(input) {
+        return {
+          sessionId: input.sessionId,
+          backendMode: 'app-server',
+          providerSession: { threadId: 'thread-generic-artifact-1' },
+          currentQuestionId: 'topic',
+          history: [],
+          currentMessage: {
+            type: 'question',
+            questionType: 'confirm',
+            questionId: 'topic',
+            title: '是否直接生成全文？',
+            description: '确认后直接输出完整文章。',
+            options: [
+              { id: 'yes', label: '是' },
+              { id: 'no', label: '否' }
+            ],
+            allowTextOverride: false
+          }
+        };
+      },
+      async submitAnswer(snapshot) {
+        return {
+          ...snapshot,
+          history: [{ questionId: 'topic', question: '是否直接生成全文？', answer: '是' }],
+          currentQuestionId: null,
+          currentMessage: {
+            type: 'artifact_ready',
+            title: 'Brainstorming artifact',
+            text: 'Artifact is ready.',
+            artifactMarkdown: [
+              '# 浙江省水利厅公务员队伍能力提升（逐段标注审校稿）',
+              '',
+              '## 以能力现代化支撑浙江水利现代化先行',
+              '',
+              '这是一段完整导语。',
+              '',
+              '## 一、当前浙江水利公务员队伍能力建设的主要短板',
+              '',
+              '这是一段完整正文。'
+            ].join('\n')
+          }
+        };
+      }
+    };
+
+    const manager = createSessionManager({ dataDir: tmpDir, runtimeAdapter });
+    const session = await manager.createSession({
+      completionMode: 'artifact',
+      initialPrompt: '写一篇完整文章'
+    });
+
+    const completed = await manager.submitAnswer(session.id, {
+      type: 'answer',
+      questionId: 'topic',
+      answerMode: 'confirm',
+      optionIds: ['yes'],
+      text: null,
+      rawInput: 'yes'
+    });
+
+    assert.strictEqual(completed.currentMessage.type, 'artifact_ready');
+    assert.strictEqual(completed.currentMessage.title, '浙江省水利厅公务员队伍能力提升（逐段标注审校稿）');
+    assert.strictEqual(completed.finishedResult.title, '浙江省水利厅公务员队伍能力提升（逐段标注审校稿）');
+    assert.strictEqual(completed.finishedResult.sections[0].title, '以能力现代化支撑浙江水利现代化先行');
+    assert(completed.currentMessage.text.includes('这是一段完整导语。'));
+
+    const markdown = manager.getFinishedResultMarkdown(session.id);
+    assert(markdown.includes('# 浙江省水利厅公务员队伍能力提升（逐段标注审校稿）'));
+    assert(markdown.includes('## 一、当前浙江水利公务员队伍能力建设的主要短板'));
+    assert(!markdown.includes('# Brainstorming artifact'));
+  });
+
+  await test('rejects placeholder artifact_ready payloads that omit the actual artifact body', async (tmpDir) => {
+    const runtimeAdapter = {
+      async createSession(input) {
+        return {
+          sessionId: input.sessionId,
+          backendMode: 'app-server',
+          providerSession: { threadId: 'thread-empty-artifact-1' },
+          currentQuestionId: 'topic',
+          history: [],
+          currentMessage: {
+            type: 'question',
+            questionType: 'confirm',
+            questionId: 'topic',
+            title: 'Ready to generate the final article?',
+            description: '',
+            options: [
+              { id: 'yes', label: 'Yes', description: '' },
+              { id: 'no', label: 'No', description: '' }
+            ],
+            allowTextOverride: true
+          }
+        };
+      },
+      async submitAnswer(snapshot) {
+        return {
+          ...snapshot,
+          history: [{ questionId: 'topic', question: 'Ready to generate the final article?', answer: 'Yes' }],
+          currentQuestionId: null,
+          currentMessage: {
+            type: 'artifact_ready',
+            title: '关于提升浙江省水利厅公务员队伍能力的决策参考稿',
+            text: 'Structured brainstorming artifact is ready.'
+          }
+        };
+      }
+    };
+
+    const manager = createSessionManager({ dataDir: tmpDir, runtimeAdapter });
+    const session = await manager.createSession({
+      completionMode: 'artifact',
+      initialPrompt: '写一篇关于浙江省水利厅公务员队伍能力提升的文章'
+    });
+
+    await assert.rejects(
+      () => manager.submitAnswer(session.id, {
+        type: 'answer',
+        questionId: 'topic',
+        answerMode: 'confirm',
+        optionIds: ['yes'],
+        text: null,
+        rawInput: 'yes'
+      }),
+      /artifact_ready without artifactMarkdown or deliverable content/
+    );
   });
 
   await test('persists provenance for visible questions and final deliverables', async (tmpDir) => {
@@ -449,7 +1228,7 @@ async function runTests() {
     assert.strictEqual(sessionFiles.length, 0);
   });
 
-  await test('full-skill workflow falls back to a local seeded session when real runtime creation fails', async (tmpDir) => {
+  await test('full-skill workflow fails explicitly when real runtime creation fails in product mode', async (tmpDir) => {
     const runtimeAdapter = {
       async createSession() {
         throw new Error('No supported Codex backend is available');
@@ -459,6 +1238,29 @@ async function runTests() {
     const manager = createSessionManager({
       dataDir: tmpDir,
       runtimeAdapter
+    });
+
+    await assert.rejects(
+      () => manager.createSession({
+        completionMode: 'artifact',
+        workflowMode: 'full_skill',
+        initialPrompt: 'A browser-first workflow for non-technical users'
+      }),
+      /No supported Codex backend is available/
+    );
+  });
+
+  await test('compatibility mode can still fall back when real runtime creation fails', async (tmpDir) => {
+    const runtimeAdapter = {
+      async createSession() {
+        throw new Error('No supported Codex backend is available');
+      }
+    };
+
+    const manager = createSessionManager({
+      dataDir: tmpDir,
+      runtimeAdapter,
+      allowFakeRuntimeFallback: true
     });
 
     const session = await manager.createSession({
@@ -474,7 +1276,89 @@ async function runTests() {
     assert.strictEqual(session.currentMessage.provenance.generationMode, 'fake-flow');
   });
 
-  await test('full-skill workflow falls back on answer submission when the real backend times out', async (tmpDir) => {
+  await test('full-skill workflow fails explicitly when real runtime creation times out in product mode', async (tmpDir) => {
+    const runtimeAdapter = {
+      async createSession() {
+        return new Promise(() => {
+          setTimeout(() => {}, 60000);
+        });
+      }
+    };
+
+    const manager = createSessionManager({
+      dataDir: tmpDir,
+      runtimeAdapter,
+      runtimeCreateTimeoutMs: 10
+    });
+
+    await assert.rejects(
+      () => manager.createSession({
+        completionMode: 'artifact',
+        workflowMode: 'full_skill',
+        initialPrompt: 'A browser-first workflow for non-technical users'
+      }),
+      /runtime createSession timed out after 10ms/
+    );
+  });
+
+  await test('compatibility mode can still continue from a fallback-created fake session', async (tmpDir) => {
+    const runtimeAdapter = {
+      async createSession() {
+        return new Promise(() => {
+          setTimeout(() => {}, 60000);
+        });
+      }
+    };
+
+    const manager = createSessionManager({
+      dataDir: tmpDir,
+      runtimeAdapter,
+      runtimeCreateTimeoutMs: 10,
+      allowFakeRuntimeFallback: true
+    });
+
+    const session = await manager.createSession({
+      completionMode: 'artifact',
+      workflowMode: 'full_skill',
+      initialPrompt: 'A browser-first workflow for non-technical users'
+    });
+
+    assert.strictEqual(session.backendMode, 'fake');
+    assert.strictEqual(session.currentMessage.questionId, 'seed-reframe');
+
+    const afterAnswer = await manager.submitAnswer(session.id, {
+      type: 'answer',
+      questionId: 'seed-reframe',
+      answerMode: 'option',
+      optionIds: ['fix-facilitation'],
+      text: null,
+      rawInput: '2'
+    });
+
+    assert.strictEqual(afterAnswer.backendMode, 'fake');
+    assert.strictEqual(afterAnswer.currentMessage.type, 'question');
+    assert.strictEqual(afterAnswer.currentMessage.questionId, 'seed-directions');
+    assert.strictEqual(afterAnswer.history.length, 1);
+    assert.strictEqual(afterAnswer.history[0].questionId, 'seed-reframe');
+
+    const inspection = manager.getSessionInspection(session.id);
+    assert.strictEqual(
+      inspection.workflow.hiddenActivity.some((entry) => (
+        entry.kind === 'runtime-fallback'
+        && entry.action === 'submit-answer'
+      )),
+      false
+    );
+    assert.strictEqual(
+      inspection.workflow.hiddenActivity.some((entry) => (
+        entry.kind === 'runtime-fallback-reseed'
+        && entry.action === 'submit-answer'
+      )),
+      false
+    );
+  });
+
+  await test('full-skill workflow fails explicitly when the real backend times out on answer submission in product mode', async (tmpDir) => {
     const runtimeAdapter = {
       async createSession(input) {
         return {
@@ -499,7 +1383,9 @@ async function runTests() {
         };
       },
       async submitAnswer() {
-        return new Promise(() => {});
+        return new Promise(() => {
+          setTimeout(() => {}, 60000);
+        });
       }
     };
 
@@ -507,6 +1393,62 @@ async function runTests() {
       dataDir: tmpDir,
       runtimeAdapter,
       runtimeSubmitTimeoutMs: 10
+    });
+    const session = await manager.createSession({
+      completionMode: 'artifact',
+      workflowMode: 'full_skill',
+      initialPrompt: 'A browser-first workflow for non-technical users'
+    });
+
+    await assert.rejects(
+      () => manager.submitAnswer(session.id, {
+        type: 'answer',
+        questionId: 'topic',
+        answerMode: 'text',
+        optionIds: [],
+        text: 'Build a product that hides engineering details but still reaches spec plus plan.',
+        rawInput: 'Build a product that hides engineering details but still reaches spec plus plan.'
+      }),
+      /runtime submitAnswer timed out after 10ms/
+    );
+  });
+
+  await test('compatibility mode can still fall back on answer submission when explicitly enabled', async (tmpDir) => {
+    const runtimeAdapter = {
+      async createSession(input) {
+        return {
+          sessionId: input.sessionId,
+          backendMode: 'app-server',
+          providerSession: { threadId: 'thread-submit-timeout', pendingRequestId: 'req-1' },
+          currentQuestionId: 'topic',
+          history: [],
+          strategyState: {
+            phase: 'scope',
+            nextLearningGoal: 'understand-the-core-problem'
+          },
+          currentMessage: {
+            type: 'question',
+            questionType: 'ask_text',
+            questionId: 'topic',
+            title: 'What do you want to brainstorm about?',
+            description: 'Start with the core topic.',
+            options: [],
+            allowTextOverride: true
+          }
+        };
+      },
+      async submitAnswer() {
+        return new Promise(() => {
+          setTimeout(() => {}, 60000);
+        });
+      }
+    };
+
+    const manager = createSessionManager({
+      dataDir: tmpDir,
+      runtimeAdapter,
+      runtimeSubmitTimeoutMs: 10,
+      allowFakeRuntimeFallback: true
     });
     const session = await manager.createSession({
       completionMode: 'artifact',
@@ -528,6 +1470,7 @@ async function runTests() {
     assert.strictEqual(afterFallback.currentMessage.questionId, 'seed-reframe');
     const inspection = manager.getSessionInspection(session.id);
     assert(inspection.workflow.hiddenActivity.some((entry) => entry.kind === 'runtime-fallback'));
+    assert.strictEqual(afterFallback.provenance.questions.at(-1).generationMode, 'fake-flow');
   });
 
   await test('full-skill workflow pauses for spec review and then completes with a spec-and-plan bundle', async (tmpDir) => {
@@ -687,6 +1630,12 @@ async function runTests() {
     assert(approved.currentMessage.deliverable, 'artifact_ready payload should carry normalized deliverable');
     assert(approved.currentMessage.finishedResult, 'artifact_ready payload should expose finished result snapshot');
     assert.strictEqual(approved.currentMessage.resultExportPaths.jsonPath, `/api/sessions/${approved.id}/result`);
+    assert(approved.roundGraph, 'round graph should be persisted');
+    assert(approved.roundGraph.rounds.some((round) => round.questionId === 'workflow-review-spec'));
+    const reviewRound = approved.roundGraph.rounds.find((round) => round.questionId === 'workflow-review-spec');
+    assert(reviewRound, 'workflow review round should remain on the mainline after approval');
+    assert.strictEqual(reviewRound.status, 'complete');
+    assert.strictEqual(reviewRound.answerSummary, 'Looks right, continue');
 
     const bundleText = fs.readFileSync(approved.artifact.filePath, 'utf-8');
     assert(bundleText.includes('Spec and Plan Bundle'));
@@ -698,7 +1647,7 @@ async function runTests() {
     assert(finishedResult.sections.some((section) => section.title === 'Next Actions'));
 
     const finishedMarkdown = manager.getFinishedResultMarkdown(session.id);
-    assert(finishedMarkdown.includes('Structured Brainstorming Result'));
+    assert(finishedMarkdown.includes('# Recommendation: Guided workflow'));
     assert(finishedMarkdown.includes('Choose: Guided workflow'));
     assert(!finishedMarkdown.includes('Spec and Plan Bundle'));
 

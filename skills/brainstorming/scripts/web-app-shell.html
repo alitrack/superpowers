@@ -5,21 +5,23 @@
   <title>Brainstorm Workbench</title>
   <style>
     :root {
-      --bg: #f4eee2;
-      --bg-deep: #eadfce;
-      --panel: rgba(255, 251, 245, 0.9);
-      --panel-strong: rgba(255, 255, 255, 0.96);
-      --panel-soft: rgba(249, 241, 232, 0.82);
-      --border: rgba(93, 70, 56, 0.15);
-      --border-strong: rgba(93, 70, 56, 0.3);
+      --bg: #f4ede2;
+      --bg-deep: #e8dccb;
+      --panel: rgba(255, 251, 245, 0.92);
+      --panel-soft: rgba(252, 247, 241, 0.84);
+      --panel-strong: rgba(255, 255, 255, 0.98);
+      --border: rgba(92, 69, 56, 0.14);
+      --border-strong: rgba(92, 69, 56, 0.32);
       --text: #1f1814;
-      --muted: #6e5d52;
-      --accent: #8b4b33;
-      --accent-deep: #4f281b;
-      --accent-soft: rgba(139, 75, 51, 0.1);
-      --pine: #34584f;
-      --pine-soft: rgba(52, 88, 79, 0.12);
-      --shadow: 0 28px 70px rgba(59, 38, 26, 0.1);
+      --muted: #6d5c50;
+      --accent: #8a4c35;
+      --accent-deep: #4e2a1f;
+      --accent-soft: rgba(138, 76, 53, 0.1);
+      --forest: #33584d;
+      --forest-soft: rgba(51, 88, 77, 0.12);
+      --danger: #9c3d2b;
+      --danger-soft: rgba(156, 61, 43, 0.1);
+      --shadow: 0 24px 70px rgba(58, 37, 26, 0.1);
       --display-font: "Fraunces", "Iowan Old Style", "Palatino Linotype", serif;
       --body-font: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
     }
@@ -32,8 +34,8 @@
       font-family: var(--body-font);
       color: var(--text);
       background:
-        radial-gradient(circle at 12% 8%, rgba(139, 75, 51, 0.16), transparent 24%),
-        radial-gradient(circle at 84% 10%, rgba(52, 88, 79, 0.14), transparent 20%),
+        radial-gradient(circle at 11% 8%, rgba(138, 76, 53, 0.16), transparent 23%),
+        radial-gradient(circle at 84% 11%, rgba(51, 88, 77, 0.14), transparent 20%),
         linear-gradient(180deg, var(--bg), var(--bg-deep));
     }
 
@@ -43,10 +45,10 @@
       inset: 0;
       pointer-events: none;
       background-image:
-        linear-gradient(rgba(93, 70, 56, 0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(93, 70, 56, 0.03) 1px, transparent 1px);
+        linear-gradient(rgba(92, 69, 56, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(92, 69, 56, 0.03) 1px, transparent 1px);
       background-size: 28px 28px;
-      opacity: 0.55;
+      opacity: 0.5;
     }
 
     .app-shell {
@@ -54,15 +56,16 @@
       z-index: 1;
       min-height: 100vh;
       display: grid;
-      grid-template-columns: 280px minmax(0, 1fr);
+      grid-template-columns: 270px minmax(0, 1fr);
       gap: 1rem;
       padding: 1rem;
     }
 
     .session-rail,
-    .shell-header,
     .workbench-board,
-    .panel {
+    .inspector-card,
+    .request-status-panel,
+    .new-topic-dock {
       background: var(--panel);
       border: 1px solid var(--border);
       box-shadow: var(--shadow);
@@ -80,8 +83,8 @@
       gap: 1rem;
       align-content: start;
       background:
-        linear-gradient(180deg, rgba(255,255,255,0.82), rgba(255,247,239,0.92)),
-        linear-gradient(135deg, rgba(139, 75, 51, 0.08), rgba(52, 88, 79, 0.05));
+        linear-gradient(180deg, rgba(255,255,255,0.84), rgba(255,247,239,0.92)),
+        linear-gradient(135deg, rgba(138, 76, 53, 0.08), rgba(51, 88, 77, 0.04));
     }
 
     .workspace {
@@ -90,31 +93,14 @@
       align-content: start;
     }
 
-    .shell-header {
-      border-radius: 28px;
-      padding: 1rem 1.05rem;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
-      gap: 1rem;
-      align-items: start;
-    }
-
     .workbench-board {
-      border-radius: 30px;
+      border-radius: 32px;
       padding: 1rem;
       display: grid;
       gap: 1rem;
       background:
-        linear-gradient(180deg, rgba(255,255,255,0.78), rgba(255,248,242,0.92)),
-        linear-gradient(135deg, rgba(139, 75, 51, 0.06), rgba(52, 88, 79, 0.04));
-    }
-
-    .panel {
-      border-radius: 24px;
-      padding: 0.95rem;
-      background:
-        linear-gradient(180deg, rgba(255,255,255,0.85), rgba(255,249,243,0.94)),
-        linear-gradient(135deg, rgba(255,255,255,0.42), rgba(245,236,227,0.24));
+        linear-gradient(180deg, rgba(255,255,255,0.8), rgba(255,248,242,0.94)),
+        linear-gradient(135deg, rgba(138, 76, 53, 0.06), rgba(51, 88, 77, 0.04));
     }
 
     .panel-label,
@@ -123,12 +109,13 @@
     .tree-node-badge,
     .meta-pill,
     .mode-button,
-    .stage-chip {
+    .stage-chip,
+    .request-chip {
       display: inline-flex;
       align-items: center;
       width: fit-content;
       border-radius: 999px;
-      padding: 0.3rem 0.62rem;
+      padding: 0.32rem 0.64rem;
       font-size: 0.72rem;
       text-transform: uppercase;
       letter-spacing: 0.12em;
@@ -138,24 +125,25 @@
     .rail-mark,
     .eyebrow,
     .tree-node-badge,
-    .stage-chip {
-      background: var(--accent-soft);
-      border: 1px solid rgba(139, 75, 51, 0.16);
+    .stage-chip,
+    .request-chip {
       color: var(--accent-deep);
+      background: var(--accent-soft);
+      border: 1px solid rgba(138, 76, 53, 0.16);
     }
 
     .mode-button {
       border: 1px solid var(--border);
-      background: rgba(255,255,255,0.7);
+      background: rgba(255,255,255,0.76);
       color: var(--muted);
       cursor: pointer;
-      transition: border-color 180ms ease, background 180ms ease, color 180ms ease, transform 180ms ease;
+      transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
     }
 
     .mode-button.active {
       color: var(--accent-deep);
+      border-color: rgba(138, 76, 53, 0.26);
       background: rgba(255, 247, 240, 0.96);
-      border-color: rgba(139, 75, 51, 0.28);
     }
 
     .mode-button:hover {
@@ -164,9 +152,9 @@
     }
 
     .rail-copy h1 {
-      margin: 0.45rem 0 0 0;
+      margin: 0.42rem 0 0 0;
       font-family: var(--display-font);
-      font-size: 1.8rem;
+      font-size: 1.78rem;
       line-height: 0.98;
       letter-spacing: -0.04em;
       font-weight: 600;
@@ -176,21 +164,20 @@
     .rail-copy p,
     .workspace-copy p,
     .new-topic-dock p,
-    .board-toolbar p,
-    .session-item span,
     .panel-copy,
-    .path-note,
-    .empty-copy,
-    .context-block p {
+    .request-status-panel p,
+    .session-item span,
+    .inspector-card p,
+    .empty-copy {
       margin: 0;
       color: var(--muted);
       line-height: 1.65;
     }
 
     .workspace-copy h2 {
-      margin: 0.45rem 0 0.5rem 0;
+      margin: 0.44rem 0 0.52rem 0;
       font-family: var(--display-font);
-      font-size: clamp(1.7rem, 2.7vw, 2.5rem);
+      font-size: clamp(1.7rem, 2.7vw, 2.48rem);
       line-height: 0.98;
       letter-spacing: -0.045em;
       max-width: 14ch;
@@ -209,7 +196,7 @@
 
     .working-rule strong {
       display: block;
-      margin-bottom: 0.32rem;
+      margin-bottom: 0.28rem;
       color: var(--accent-deep);
     }
 
@@ -230,35 +217,67 @@
     .session-item:hover {
       transform: translateY(-1px);
       border-color: var(--border-strong);
-      box-shadow: 0 16px 30px rgba(59, 38, 26, 0.08);
+      box-shadow: 0 16px 28px rgba(58, 37, 26, 0.08);
       background: rgba(255,255,255,0.96);
     }
 
+    .session-item-shell {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 0.6rem;
+      align-items: start;
+    }
+
+    .session-item-copy {
+      min-width: 0;
+    }
+
+    .session-delete-button {
+      border: 1px solid rgba(156, 61, 43, 0.2);
+      background: var(--danger-soft);
+      color: var(--danger);
+      border-radius: 999px;
+      padding: 0.3rem 0.65rem;
+      cursor: pointer;
+      font-size: 0.74rem;
+      line-height: 1;
+      transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+    }
+
+    .session-delete-button:hover {
+      transform: translateY(-1px);
+      border-color: rgba(156, 61, 43, 0.34);
+      background: rgba(156, 61, 43, 0.16);
+    }
+
+    .session-delete-button.armed {
+      border-color: rgba(156, 61, 43, 0.42);
+      background: rgba(156, 61, 43, 0.22);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.26);
+    }
+
     .session-item.active {
-      border-color: rgba(139, 75, 51, 0.28);
+      border-color: rgba(138, 76, 53, 0.28);
       background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(255, 240, 231, 0.96));
     }
 
     .session-item strong,
     .tree-node strong,
+    .inspector-card strong,
+    .request-status-panel strong,
     .result-card strong,
-    .package-card strong,
-    .selected-node-panel strong,
-    .stage-strip strong,
-    .active-stage-title {
+    .package-card strong {
       display: block;
     }
 
     .new-topic-dock {
       border-radius: 24px;
-      border: 1px solid var(--border);
       padding: 0.95rem;
       display: grid;
       gap: 0.8rem;
       background:
         linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,247,240,0.88)),
-        linear-gradient(135deg, rgba(139,75,51,0.08), rgba(52,88,79,0.05));
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.72);
+        linear-gradient(135deg, rgba(138,76,53,0.08), rgba(51,88,77,0.04));
     }
 
     .new-topic-dock strong {
@@ -269,7 +288,7 @@
 
     textarea {
       width: 100%;
-      min-height: 116px;
+      min-height: 112px;
       resize: vertical;
       padding: 0.9rem 0.95rem;
       border-radius: 18px;
@@ -282,16 +301,16 @@
 
     textarea:focus,
     button:focus,
-    a:focus,
-    .tree-node:focus {
-      outline: 2px solid rgba(52, 88, 79, 0.28);
+    a:focus {
+      outline: 2px solid rgba(51, 88, 77, 0.24);
       outline-offset: 2px;
     }
 
     .composer-actions,
     .workspace-mode-toggle,
-    .completion-action-row,
-    .active-stage-meta {
+    .request-actions,
+    .active-node-meta,
+    .completion-action-row {
       display: flex;
       flex-wrap: wrap;
       gap: 0.6rem;
@@ -307,7 +326,7 @@
       font: inherit;
       cursor: pointer;
       text-decoration: none;
-      transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+      transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, opacity 180ms ease;
     }
 
     button:hover,
@@ -317,114 +336,192 @@
       background: rgba(255,255,255,0.98);
     }
 
+    button:disabled,
+    .completion-action[aria-disabled="true"] {
+      opacity: 0.58;
+      cursor: not-allowed;
+      transform: none;
+    }
+
     .primary-button {
-      background: linear-gradient(135deg, var(--accent), #b56b4b);
+      background: linear-gradient(135deg, var(--accent), #af6546);
       color: white;
       border-color: transparent;
-      box-shadow: 0 16px 32px rgba(139, 75, 51, 0.18);
+      box-shadow: 0 16px 32px rgba(138, 76, 53, 0.18);
     }
 
     .primary-button:hover {
-      background: linear-gradient(135deg, #7a3f2a, #9f5d40);
+      background: linear-gradient(135deg, #7b412c, #98583d);
     }
 
     .composer-error {
-      color: #9f3c26;
+      color: var(--danger);
       font-size: 0.88rem;
     }
 
-    .board-toolbar {
-      display: grid;
-      grid-template-columns: minmax(0, 1.2fr) minmax(280px, 1fr) auto;
-      gap: 0.8rem;
-      align-items: center;
-    }
-
     .stage-strip {
-      padding: 0.85rem 0.9rem;
+      padding: 0.86rem 0.9rem;
       border-radius: 20px;
-      border: 1px solid rgba(52, 88, 79, 0.18);
+      border: 1px solid rgba(51, 88, 77, 0.18);
       background:
         linear-gradient(180deg, rgba(244,251,247,0.95), rgba(255,255,255,0.88)),
-        linear-gradient(135deg, rgba(52,88,79,0.1), rgba(139,75,51,0.04));
+        linear-gradient(135deg, rgba(51,88,77,0.1), rgba(138,76,53,0.04));
       display: grid;
-      gap: 0.45rem;
+      gap: 0.42rem;
     }
 
     .stage-strip strong {
       font-size: 0.98rem;
-      color: var(--pine);
+      color: var(--forest);
     }
 
-    .workbench-grid {
+    .rail-stage-strip {
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.66);
+    }
+
+    .request-status-panel {
+      border-radius: 22px;
+      padding: 0.92rem;
       display: grid;
-      grid-template-columns: 280px minmax(0, 1fr) 340px;
+      gap: 0.5rem;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,249,244,0.92)),
+        linear-gradient(135deg, rgba(138,76,53,0.08), rgba(51,88,77,0.04));
+    }
+
+    .request-status-panel[data-state="error"] {
+      border-color: rgba(156, 61, 43, 0.24);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,246,244,0.92)),
+        linear-gradient(135deg, var(--danger-soft), rgba(255,255,255,0.12));
+    }
+
+    .request-status-panel[data-state="success"] {
+      border-color: rgba(51, 88, 77, 0.24);
+      background:
+        linear-gradient(180deg, rgba(248,252,250,0.98), rgba(255,255,255,0.94)),
+        linear-gradient(135deg, rgba(51,88,77,0.12), rgba(138,76,53,0.04));
+    }
+
+    .request-status-panel[hidden] {
+      display: none;
+    }
+
+    .canvas-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 320px;
       gap: 1rem;
       align-items: start;
     }
 
-    .decision-tree-panel,
-    .context-panel {
+    .tree-canvas-stage {
+      border-radius: 28px;
+      border: 1px solid var(--border);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,248,242,0.95)),
+        linear-gradient(135deg, rgba(255,255,255,0.32), rgba(245,236,227,0.12));
+      padding: 1rem;
       display: grid;
-      gap: 0.9rem;
+      gap: 1rem;
+      min-height: 720px;
+      position: relative;
+      overflow: hidden;
     }
 
-    .tree-header,
-    .panel-header {
+    .tree-canvas-stage::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 18% 22%, rgba(138,76,53,0.05), transparent 24%),
+        radial-gradient(circle at 78% 30%, rgba(51,88,77,0.06), transparent 22%);
+    }
+
+    .tree-scene-header {
+      position: relative;
+      z-index: 1;
       display: flex;
       justify-content: space-between;
       gap: 0.8rem;
       align-items: start;
     }
 
-    .history-toggle-button {
-      white-space: nowrap;
-    }
-
-    .tree-group {
+    .tree-scene-actions {
       display: grid;
-      gap: 0.6rem;
+      gap: 0.55rem;
+      justify-items: end;
     }
 
-    .tree-group-title {
-      margin: 0;
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: var(--accent-deep);
+    .workspace-mode-toggle {
+      padding: 0.28rem;
+      border-radius: 999px;
+      border: 1px solid rgba(92, 69, 56, 0.14);
+      background: rgba(255,255,255,0.84);
+      box-shadow: 0 12px 26px rgba(58, 37, 26, 0.06);
     }
 
-    .tree-list {
+    .workspace-mode-toggle .mode-button {
+      padding: 0.44rem 0.78rem;
+      font-size: 0.68rem;
+      letter-spacing: 0.1em;
+      background: transparent;
+      border-color: transparent;
+    }
+
+    .workspace-mode-toggle .mode-button.active {
+      background: rgba(255, 247, 240, 0.98);
+      border-color: rgba(138, 76, 53, 0.18);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
+    }
+
+    .tree-scene {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: 240px minmax(0, 1fr) 280px;
+      gap: 1rem;
+      align-items: start;
+      min-height: 560px;
+    }
+
+    .tree-origin-column,
+    .tree-branches-column {
+      display: grid;
+      gap: 1rem;
+    }
+
+    .tree-origin-column {
+      position: relative;
+      padding-top: 0.35rem;
+    }
+
+    .tree-origin-column::before {
+      content: "";
+      position: absolute;
+      left: 1.08rem;
+      top: 2.2rem;
+      bottom: 1rem;
+      width: 2px;
+      background: linear-gradient(180deg, rgba(138,76,53,0.28), rgba(51,88,77,0.18));
+    }
+
+    .tree-trunk-list,
+    .tree-branch-list,
+    .tree-attachment-list,
+    .tree-result-list {
       display: grid;
       gap: 0.8rem;
     }
 
-    .tree-node-list {
-      display: grid;
-      gap: 0.5rem;
-      position: relative;
-    }
-
-    .tree-node-list::before {
-      content: "";
-      position: absolute;
-      left: 0.92rem;
-      top: 0.2rem;
-      bottom: 0.2rem;
-      width: 1px;
-      background: linear-gradient(180deg, rgba(139, 75, 51, 0.24), rgba(52, 88, 79, 0.18));
-    }
-
     .tree-node {
       position: relative;
-      z-index: 1;
       display: grid;
-      gap: 0.28rem;
-      padding: 0.8rem 0.82rem 0.8rem 1.55rem;
+      gap: 0.32rem;
+      padding: 0.86rem 0.88rem 0.86rem 1.6rem;
       border-radius: 18px;
       border: 1px solid var(--border);
-      background: rgba(255,255,255,0.82);
-      text-align: left;
+      background: rgba(255,255,255,0.84);
       cursor: pointer;
       transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
     }
@@ -432,13 +529,13 @@
     .tree-node::before {
       content: "";
       position: absolute;
-      left: 0.72rem;
+      left: 0.74rem;
       top: 1rem;
       width: 10px;
       height: 10px;
       border-radius: 999px;
-      background: rgba(139, 75, 51, 0.4);
-      box-shadow: 0 0 0 4px rgba(139, 75, 51, 0.08);
+      background: rgba(138, 76, 53, 0.42);
+      box-shadow: 0 0 0 4px rgba(138, 76, 53, 0.08);
     }
 
     .tree-node:hover {
@@ -446,85 +543,145 @@
       border-color: var(--border-strong);
     }
 
-    .tree-node.active {
-      border-color: rgba(52, 88, 79, 0.28);
-      background: linear-gradient(135deg, rgba(247,253,250,0.96), rgba(255,255,255,0.94));
-    }
-
-    .tree-node.active::before {
-      background: var(--pine);
-      box-shadow: 0 0 0 4px rgba(52, 88, 79, 0.12);
-    }
-
     .tree-node.selected {
-      border-color: rgba(139, 75, 51, 0.32);
-      background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(255, 241, 232, 0.96));
+      border-color: rgba(138, 76, 53, 0.34);
+      background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(255, 240, 231, 0.96));
+    }
+
+    .tree-node strong {
+      font-size: 0.98rem;
     }
 
     .tree-node span {
       color: var(--muted);
-      line-height: 1.5;
+      line-height: 1.55;
       font-size: 0.92rem;
     }
 
-    .active-stage-panel {
-      display: grid;
-      gap: 0.95rem;
-      padding: 1rem;
+    .tree-node.topic-node {
+      margin-left: 0.42rem;
       background:
-        linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,248,242,0.96)),
-        linear-gradient(135deg, rgba(255,255,255,0.5), rgba(245,236,227,0.24));
+        linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,248,242,0.92)),
+        linear-gradient(135deg, rgba(138,76,53,0.05), rgba(51,88,77,0.04));
     }
 
-    .active-stage-header {
+    .tree-node.topic-node::before {
+      background: var(--accent);
+    }
+
+    .tree-node.branch-node::before {
+      background: var(--forest);
+      box-shadow: 0 0 0 4px rgba(51, 88, 77, 0.1);
+    }
+
+    .canvas-active-node {
+      position: relative;
+      min-height: 480px;
+      border-radius: 24px;
+      border: 1px solid rgba(51, 88, 77, 0.2);
+      background:
+        linear-gradient(180deg, rgba(249,252,251,0.96), rgba(255,255,255,0.94)),
+        linear-gradient(135deg, rgba(51,88,77,0.1), rgba(138,76,53,0.05));
+      padding: 1rem;
+      display: grid;
+      gap: 0.9rem;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.82);
+    }
+
+    .canvas-active-node::before {
+      content: "";
+      position: absolute;
+      left: -36px;
+      top: 50%;
+      width: 36px;
+      height: 2px;
+      background: linear-gradient(90deg, rgba(138,76,53,0.28), rgba(51,88,77,0.28));
+    }
+
+    .canvas-active-node::after {
+      content: "";
+      position: absolute;
+      right: -48px;
+      top: 50%;
+      width: 48px;
+      height: 2px;
+      background: linear-gradient(90deg, rgba(51,88,77,0.28), rgba(138,76,53,0.2));
+    }
+
+    .canvas-active-node.request-pending {
+      opacity: 0.88;
+    }
+
+    .canvas-active-node.request-pending .option,
+    .canvas-active-node.request-pending [data-role="submit"] {
+      pointer-events: none;
+      opacity: 0.58;
+    }
+
+    .active-node-header {
       display: grid;
       gap: 0.65rem;
     }
 
-    .active-stage-title {
+    .active-node-title {
       margin: 0;
       font-family: var(--display-font);
-      font-size: clamp(1.5rem, 2.3vw, 2.25rem);
+      font-size: clamp(1.48rem, 2.2vw, 2.1rem);
       line-height: 0.98;
       letter-spacing: -0.04em;
       font-weight: 600;
     }
 
-    .active-stage-copy {
+    .active-node-copy {
       margin: 0;
       color: var(--muted);
       line-height: 1.7;
       font-size: 0.98rem;
     }
 
-    .stage-host,
+    .tree-node-stage,
     .empty-stage {
       min-height: 320px;
-      border-radius: 22px;
-      border: 1px solid rgba(93, 70, 56, 0.12);
-      background:
-        linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,248,242,0.92)),
-        linear-gradient(135deg, rgba(139,75,51,0.05), rgba(52,88,79,0.03));
-      padding: 0.95rem;
-    }
-
-    .selected-node-panel,
-    .finished-result-panel {
-      display: grid;
-      gap: 0.7rem;
-    }
-
-    .selected-node-panel {
-      padding: 0.95rem;
       border-radius: 20px;
-      border: 1px solid var(--border);
-      background: rgba(255,255,255,0.8);
+      border: 1px solid rgba(92, 69, 56, 0.12);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,248,242,0.94)),
+        linear-gradient(135deg, rgba(138,76,53,0.04), rgba(51,88,77,0.03));
+      padding: 0.95rem;
     }
 
-    .selected-node-panel .body,
-    .context-section-card .body,
+    .tree-branches-column section {
+      position: relative;
+    }
+
+    .tree-branches-column section::before {
+      content: "";
+      position: absolute;
+      left: -24px;
+      top: 1.2rem;
+      width: 24px;
+      height: 2px;
+      background: linear-gradient(90deg, rgba(51,88,77,0.24), rgba(138,76,53,0.16));
+    }
+
+    .canvas-inspector-drawer {
+      display: grid;
+      gap: 0.8rem;
+    }
+
+    .inspector-card {
+      border-radius: 22px;
+      padding: 0.92rem;
+      display: grid;
+      gap: 0.5rem;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.88), rgba(255,249,243,0.94)),
+        linear-gradient(135deg, rgba(255,255,255,0.2), rgba(245,236,227,0.1));
+    }
+
+    .inspector-body,
     .artifact-block,
-    .package-card .path {
+    .package-path {
       white-space: pre-wrap;
       color: var(--muted);
       line-height: 1.6;
@@ -536,46 +693,178 @@
     .completion-section-grid,
     .completion-package-grid {
       display: grid;
-      gap: 0.7rem;
+      gap: 0.72rem;
     }
 
-    .context-section-card,
     .result-card,
     .package-card {
       border-radius: 18px;
       border: 1px solid var(--border);
-      background: rgba(255,255,255,0.82);
-      padding: 0.8rem;
+      background: rgba(255,255,255,0.84);
+      padding: 0.82rem;
       display: grid;
       gap: 0.45rem;
     }
 
-    .completion-hero {
-      display: grid;
-      gap: 0.7rem;
-    }
-
     .result-card.hero {
+      border-color: rgba(51, 88, 77, 0.22);
       background:
         linear-gradient(180deg, rgba(248,252,250,0.96), rgba(255,255,255,0.92)),
-        linear-gradient(135deg, rgba(52,88,79,0.08), rgba(139,75,51,0.05));
-      border-color: rgba(52, 88, 79, 0.22);
+        linear-gradient(135deg, rgba(51,88,77,0.08), rgba(138,76,53,0.05));
     }
 
-    .supporting-package-panel[hidden],
-    .finished-result-panel[hidden] {
+    .canvas-active-node[hidden],
+    .completion-cluster[hidden],
+    .supporting-package-panel[hidden] {
       display: none;
     }
 
-    @media (max-width: 1180px) {
-      .shell-header,
-      .board-toolbar,
-      .workbench-grid {
+    .brainstorm-graph-root {
+      height: min(72vh, 860px);
+      min-height: 540px;
+      border-radius: 26px;
+      overflow: hidden;
+      border: 1px solid rgba(92, 69, 56, 0.12);
+      background:
+        radial-gradient(circle at 14% 18%, rgba(138, 76, 53, 0.1), transparent 24%),
+        radial-gradient(circle at 82% 16%, rgba(51, 88, 77, 0.08), transparent 24%),
+        linear-gradient(180deg, rgba(255, 252, 248, 0.98), rgba(247, 240, 232, 0.96));
+    }
+
+    .brainstorm-flow-node {
+      border-radius: 24px;
+      border: 1px solid rgba(92, 69, 56, 0.15);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,249,243,0.94)),
+        linear-gradient(135deg, rgba(138,76,53,0.05), rgba(51,88,77,0.04));
+      box-shadow: 0 18px 48px rgba(61, 41, 31, 0.1);
+      padding: 0.82rem 0.88rem;
+      color: var(--text);
+      display: grid;
+      gap: 0.48rem;
+    }
+
+    .brainstorm-flow-node.is-selected {
+      border-color: rgba(138, 76, 53, 0.42);
+      box-shadow: 0 22px 56px rgba(138, 76, 53, 0.18);
+    }
+
+    .brainstorm-flow-node__badge {
+      display: inline-flex;
+      width: fit-content;
+      border-radius: 999px;
+      padding: 0.26rem 0.56rem;
+      background: rgba(138, 76, 53, 0.1);
+      color: var(--accent-deep);
+      font-size: 0.66rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .brainstorm-flow-node__title {
+      margin: 0;
+      font-family: var(--display-font);
+      font-size: 0.98rem;
+      line-height: 1.12;
+      letter-spacing: -0.03em;
+    }
+
+    .brainstorm-flow-node__body {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.52;
+      white-space: pre-wrap;
+      font-size: 0.84rem;
+    }
+
+    .brainstorm-flow-node__meta,
+    .brainstorm-flow-node__actions {
+      display: flex;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+    }
+
+    .brainstorm-flow-node__drag-handle {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      width: fit-content;
+      border-radius: 999px;
+      padding: 0.28rem 0.62rem;
+      border: 1px dashed rgba(92, 69, 56, 0.2);
+      background: rgba(255,255,255,0.82);
+      color: var(--muted);
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: grab;
+      user-select: none;
+    }
+
+    .brainstorm-flow-node__drag-handle::before {
+      content: "::::";
+      letter-spacing: 0.16em;
+      color: rgba(92, 69, 56, 0.5);
+    }
+
+    .brainstorm-flow-node__meta span,
+    .brainstorm-flow-node__actions a {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 0.34rem 0.65rem;
+      border: 1px solid rgba(92, 69, 56, 0.14);
+      background: rgba(255,255,255,0.8);
+      color: var(--accent-deep);
+      text-decoration: none;
+      font-size: 0.78rem;
+    }
+
+    .brainstorm-flow-node__host {
+      border-radius: 18px;
+      border: 1px solid rgba(92, 69, 56, 0.12);
+      background: rgba(255,255,255,0.84);
+      padding: 0.22rem;
+      overflow: hidden;
+    }
+
+    .brainstorm-flow-node--active {
+      border-color: rgba(138, 76, 53, 0.3);
+      background:
+        linear-gradient(180deg, rgba(255,253,249,0.98), rgba(255,246,238,0.96)),
+        linear-gradient(135deg, rgba(138,76,53,0.08), rgba(51,88,77,0.04));
+    }
+
+    .brainstorm-flow-node--convergence {
+      border-color: rgba(51, 88, 77, 0.24);
+      background:
+        linear-gradient(180deg, rgba(248,252,250,0.98), rgba(255,255,255,0.95)),
+        linear-gradient(135deg, rgba(51,88,77,0.08), rgba(138,76,53,0.03));
+    }
+
+    .brainstorm-flow-node--artifact {
+      border-color: rgba(138, 76, 53, 0.28);
+      background:
+        linear-gradient(180deg, rgba(255,250,245,0.98), rgba(255,255,255,0.96)),
+        linear-gradient(135deg, rgba(138,76,53,0.08), rgba(176,134,93,0.04));
+    }
+
+    @media (max-width: 1220px) {
+      .canvas-layout,
+      .tree-scene,
+      .shell-header {
         grid-template-columns: 1fr;
       }
 
-      .board-toolbar {
-        align-items: start;
+      .canvas-active-node::before,
+      .canvas-active-node::after,
+      .tree-branches-column section::before {
+        display: none;
+      }
+
+      .tree-origin-column::before {
+        left: 0.7rem;
       }
     }
 
@@ -596,22 +885,11 @@
       }
 
       .session-rail,
-      .shell-header,
       .workbench-board,
-      .panel {
+      .request-status-panel,
+      .new-topic-dock,
+      .inspector-card {
         border-radius: 22px;
-      }
-
-      .shell-header {
-        padding: 0.9rem;
-      }
-
-      .workspace-copy h2 {
-        font-size: 1.55rem;
-      }
-
-      .active-stage-title {
-        font-size: 1.42rem;
       }
     }
   </style>
@@ -621,109 +899,86 @@
     <aside class="session-rail">
       <div class="rail-copy">
         <div class="rail-mark">Brainstorming</div>
-        <h1>Branch-first workbench.</h1>
-        <p>不是再堆一页卡片，而是把当前问题、已走路径和交付结果放进同一个可理解的工作台。</p>
+        <h1>Tree-first canvas.</h1>
+        <p>主舞台是决策树，不再是表单面板加辅助卡片。当前问题必须作为树上的 active node 推进。</p>
       </div>
 
       <div class="working-rule">
         <strong>Working rule</strong>
-        Ask exactly one formal question at a time. The workspace may show branch context, but only one active node can accept an answer.
+        Ask exactly one formal question at a time. The canvas may show branches, but only one active branch node can accept an answer.
       </div>
 
       <section>
         <div class="panel-label">Recent Sessions</div>
         <div id="session-list" class="session-list"></div>
       </section>
+
+      <section id="workflow-stage-strip" class="stage-strip rail-stage-strip">
+        <div class="stage-chip">Workflow Stage</div>
+        <strong id="workflow-stage-title">Waiting for a real topic</strong>
+        <p id="workflow-stage-copy">Start a session to see the current workflow stage and checkpoint context here.</p>
+      </section>
+
+      <section id="request-status-panel" class="request-status-panel" hidden>
+        <div class="request-chip">Request Status</div>
+        <strong id="request-status-title">Creating artifact session</strong>
+        <p id="request-status-copy">Creating artifact session. The first real-runtime step can take a while; please wait.</p>
+        <div class="request-actions">
+          <button id="request-status-retry" type="button" hidden>Try again</button>
+        </div>
+      </section>
+
+      <section id="new-brainstorm-dock" class="new-topic-dock">
+        <div>
+          <strong>Start Another Topic</strong>
+          <p>把新的 topic 放在左侧 rail，和切换、删除历史 session 放在同一组会话动作里。</p>
+        </div>
+        <textarea id="persistent-seed-input" placeholder="写下真正要讨论的问题、冲突、目标张力或判断标准。"></textarea>
+        <div class="composer-actions">
+          <button id="persistent-start-artifact" class="primary-button" type="button">Artifact Session</button>
+          <button id="persistent-start-summary" type="button">Summary Session</button>
+        </div>
+        <div id="persistent-seed-error" class="composer-error" hidden>先写下这轮真正的问题，再开始。</div>
+      </section>
     </aside>
 
     <main class="workspace">
-      <section class="shell-header">
-        <div class="workspace-copy">
-          <div class="eyebrow">Brainstorm Workbench</div>
-          <h2 id="workspace-title">One live question, visible branch path.</h2>
-          <p id="workspace-subtitle">Keep one active node in focus while the branch path stays visible.</p>
-        </div>
-
-        <section id="new-brainstorm-dock" class="new-topic-dock">
-          <div>
-            <strong>Start Another Topic</strong>
-            <p>新议题入口仍然可用，但它现在是次级动作，不再抢走当前这轮头脑风暴的主舞台。</p>
-          </div>
-          <textarea id="persistent-seed-input" placeholder="把真正要讨论的问题、冲突、目标张力或价值判断写在这里。"></textarea>
-          <div class="composer-actions">
-            <button id="persistent-start-artifact" class="primary-button" type="button">Artifact Session</button>
-            <button id="persistent-start-summary" type="button">Summary Session</button>
-          </div>
-          <div id="persistent-seed-error" class="composer-error" hidden>先写下这轮真正的问题，再开始。</div>
-        </section>
-      </section>
+      <div id="workspace-title" hidden>One active node inside a visible tree.</div>
+      <div id="workspace-subtitle" hidden>Start from one real topic, keep one active node, and let the result converge on the same canvas.</div>
 
       <section class="workbench-board">
-        <div class="board-toolbar">
-          <div>
-            <div class="panel-label">Workbench Mode</div>
-            <p>Keep one active node in focus while the branch path stays visible.</p>
-          </div>
-
-          <section id="workflow-stage-strip" class="stage-strip">
-            <div class="stage-chip">Workflow Stage</div>
-            <strong id="workflow-stage-title">Waiting for a real topic</strong>
-            <p id="workflow-stage-copy">Start a session to see the current workflow stage and checkpoint context here.</p>
-          </section>
-
-          <div id="workspace-mode-toggle" class="workspace-mode-toggle">
-            <button id="workspace-mode-focused" class="mode-button active" type="button">Focused View</button>
-            <button id="workspace-mode-overview" class="mode-button" type="button">Overview</button>
-          </div>
-        </div>
-
-        <div class="workbench-grid">
-          <section id="decision-tree-panel" class="panel decision-tree-panel">
-            <div class="tree-header">
+        <div class="canvas-layout">
+          <section id="tree-canvas-stage" class="tree-canvas-stage">
+            <div class="tree-scene-header">
               <div>
-                <div class="panel-label">Decision Tree</div>
-                <p id="tree-summary" class="panel-copy">Open a session to see the current path, adjacent directions, and finished nodes.</p>
+                <div class="panel-label">Decision Graph</div>
+                <p id="tree-summary" class="panel-copy">Open a session to see the topic root, active node, branches, and convergence graph.</p>
               </div>
-              <button id="history-toggle-button" class="history-toggle-button" type="button">Open Full History</button>
+              <div class="tree-scene-actions">
+                <div id="workspace-mode-toggle" class="workspace-mode-toggle">
+                  <button id="workspace-mode-focused" class="mode-button active" type="button">Focused View</button>
+                  <button id="workspace-mode-overview" class="mode-button" type="button">Overview</button>
+                </div>
+                <button id="history-toggle-button" class="history-toggle-button" type="button">Open Full History</button>
+              </div>
             </div>
-            <div id="decision-tree-list" class="tree-list"></div>
+
+            <div id="brainstorm-graph-root" class="brainstorm-graph-root" data-graph-engine="xyflow"></div>
           </section>
 
-          <section id="active-stage-panel" class="panel active-stage-panel">
-            <header class="active-stage-header">
-              <div id="active-stage-kicker" class="eyebrow">Active Node</div>
-              <h3 id="active-stage-title" class="active-stage-title">Start with one real problem.</h3>
-              <p id="active-stage-copy" class="active-stage-copy">Use the secondary topic dock to begin a new brainstorming session.</p>
-              <div id="active-stage-meta" class="active-stage-meta"></div>
-            </header>
-            <section id="session-root" class="stage-host"></section>
-          </section>
-
-          <aside id="context-panel" class="panel context-panel">
-            <section id="selected-node-panel" class="selected-node-panel">
+          <aside id="canvas-inspector-drawer" class="canvas-inspector-drawer">
+            <section class="inspector-card">
               <div class="panel-label">Selected Node</div>
               <strong id="selected-node-title">No node selected</strong>
-              <div id="selected-node-body" class="body">Select a branch node, checkpoint, or result section to inspect it here.</div>
+              <div id="selected-node-body" class="inspector-body">Select a path node, branch, or result node to inspect it here.</div>
             </section>
 
             <div id="context-section-list" class="context-section-list"></div>
 
-            <section id="finished-result-panel" class="finished-result-panel" hidden>
-              <div class="panel-label">Finished Result</div>
-              <strong id="completion-title">Spec and plan are ready</strong>
-              <p id="completion-cluster-copy" class="panel-copy">Review the finished result, then inspect or export the supporting package.</p>
-              <div id="completion-action-row" class="completion-action-row">
-                <a id="completion-export-markdown" class="completion-action primary-button" href="#" download="brainstorm-result.md">Export Markdown</a>
-                <a id="completion-export-json" class="completion-action" href="#" download="brainstorm-result.json">Export JSON</a>
-              </div>
-              <div id="completion-hero" class="completion-hero"></div>
-              <div id="completion-section-grid" class="completion-section-grid"></div>
-            </section>
-
-            <section id="supporting-package-panel" class="supporting-package-panel" hidden>
-              <div id="completion-supporting-package">
+            <section id="supporting-package-panel" class="inspector-card supporting-package-panel" hidden>
+              <div id="artifact-supporting-package">
                 <div class="panel-label">Supporting Package</div>
-                <p class="panel-copy">Spec、plan 和 bundle 仍然存在，但它们已经退居为支撑结果的工作台资产。</p>
+                <p class="panel-copy">Spec、plan 和 bundle 仍然存在，但它们现在只是次级交付资产。</p>
               </div>
               <div id="completion-package-grid" class="completion-package-grid"></div>
             </section>
@@ -733,38 +988,31 @@
     </main>
   </div>
 
+  <!-- BRAINSTORM_GRAPH_CLIENT_CSS -->
   <!-- BRAINSTORM_MAINSTAGE_SCRIPT -->
+  <!-- BRAINSTORM_GRAPH_CLIENT_SCRIPT -->
   <!-- STRUCTURED_HOST_SCRIPT -->
   <script>
     window.addEventListener('load', () => {
-      const rootEl = document.getElementById('session-root');
+      const graphRootEl = document.getElementById('brainstorm-graph-root');
       const sessionListEl = document.getElementById('session-list');
       const titleEl = document.getElementById('workspace-title');
       const subtitleEl = document.getElementById('workspace-subtitle');
       const stageTitleEl = document.getElementById('workflow-stage-title');
       const stageCopyEl = document.getElementById('workflow-stage-copy');
-      const activeStageKickerEl = document.getElementById('active-stage-kicker');
-      const activeStageTitleEl = document.getElementById('active-stage-title');
-      const activeStageCopyEl = document.getElementById('active-stage-copy');
-      const activeStageMetaEl = document.getElementById('active-stage-meta');
       const treeSummaryEl = document.getElementById('tree-summary');
-      const treeListEl = document.getElementById('decision-tree-list');
       const selectedNodeTitleEl = document.getElementById('selected-node-title');
       const selectedNodeBodyEl = document.getElementById('selected-node-body');
       const contextSectionListEl = document.getElementById('context-section-list');
       const persistentSeedInputEl = document.getElementById('persistent-seed-input');
       const persistentSeedErrorEl = document.getElementById('persistent-seed-error');
       const historyToggleButtonEl = document.getElementById('history-toggle-button');
-      const completionSurfaceEl = document.getElementById('finished-result-panel');
-      const completionTitleEl = document.getElementById('completion-title');
-      const completionClusterCopyEl = document.getElementById('completion-cluster-copy');
-      const completionActionRowEl = document.getElementById('completion-action-row');
-      const completionExportMarkdownEl = document.getElementById('completion-export-markdown');
-      const completionExportJsonEl = document.getElementById('completion-export-json');
-      const completionHeroEl = document.getElementById('completion-hero');
-      const completionSectionGridEl = document.getElementById('completion-section-grid');
       const supportingPackagePanelEl = document.getElementById('supporting-package-panel');
       const completionPackageGridEl = document.getElementById('completion-package-grid');
+      const requestStatusPanelEl = document.getElementById('request-status-panel');
+      const requestStatusTitleEl = document.getElementById('request-status-title');
+      const requestStatusCopyEl = document.getElementById('request-status-copy');
+      const requestStatusRetryEl = document.getElementById('request-status-retry');
       const workspaceModeFocusedEl = document.getElementById('workspace-mode-focused');
       const workspaceModeOverviewEl = document.getElementById('workspace-mode-overview');
 
@@ -772,16 +1020,18 @@
       let currentSessionSnapshot = null;
       let workspaceMode = 'focused';
       let inspectedCardId = null;
-
-      const host = window.structuredBrainstorming.mountMessageHost(rootEl, {
-        showMeta: false,
-        onAnswer(answer) {
-          if (!window.currentSessionId) {
-            return;
-          }
-          submitAnswer(window.currentSessionId, answer);
-        }
-      });
+      let graphClient = null;
+      let pendingDeleteSessionId = null;
+      let requestStatusTimer = null;
+      let processingPollTimer = null;
+      const PROCESSING_POLL_MS = 1500;
+      let requestState = {
+        phase: 'idle',
+        scope: null,
+        title: '',
+        copy: '',
+        retry: null
+      };
 
       function escapeHtml(value) {
         return String(value == null ? '' : value)
@@ -799,11 +1049,18 @@
           body: body ? JSON.stringify(body) : undefined
         });
 
-        if (!response.ok) {
-          throw new Error(`Request failed: ${response.status}`);
+        let payload = null;
+        try {
+          payload = await response.json();
+        } catch (parseError) {
+          payload = null;
         }
 
-        return response.json();
+        if (!response.ok) {
+          throw new Error(payload && payload.error ? payload.error : `Request failed: ${response.status}`);
+        }
+
+        return payload;
       }
 
       function readPersistentSeed() {
@@ -812,27 +1069,226 @@
 
       function truncateSeed(text) {
         if (!text) {
-          return 'One live question, visible branch path.';
+          return 'One active node inside a visible tree.';
         }
         return text.length > 72 ? `${text.slice(0, 72)}…` : text;
+      }
+
+      function setCreateControlsDisabled(disabled) {
+        persistentSeedInputEl.disabled = disabled;
+        document.getElementById('persistent-start-artifact').disabled = disabled;
+        document.getElementById('persistent-start-summary').disabled = disabled;
+      }
+
+      function setAnswerControlsDisabled(disabled) {
+        graphRootEl.classList.toggle('request-pending', disabled);
+        Array.from(graphRootEl.querySelectorAll('button, textarea, input, select')).forEach((el) => {
+          el.disabled = disabled;
+        });
+      }
+
+      function getSessionProcessing(session) {
+        return session && session.processing && typeof session.processing === 'object'
+          ? session.processing
+          : null;
+      }
+
+      function isSubmitProcessing(session) {
+        const processing = getSessionProcessing(session);
+        return Boolean(processing && processing.state === 'running' && processing.action === 'submit');
+      }
+
+      function isAnyProcessing(session) {
+        const processing = getSessionProcessing(session);
+        return Boolean(processing && processing.state === 'running');
+      }
+
+      function getDerivedRequestState(session) {
+        const processing = getSessionProcessing(session);
+        if (!processing) {
+          return null;
+        }
+
+        if (processing.state === 'running') {
+          if (processing.action === 'create') {
+            return {
+              phase: 'pending',
+              scope: 'processing',
+              title: 'Preparing session in background',
+              copy: 'The first brainstorming turn is still running. You can leave this page and come back later.'
+            };
+          }
+          return {
+            phase: 'pending',
+            scope: 'processing',
+            title: 'Processing answer in background',
+            copy: 'This turn is still running in background. The current question stays frozen until the next real message arrives.'
+          };
+        }
+
+        if (processing.state === 'failed') {
+          return {
+            phase: 'error',
+            scope: 'processing',
+            title: 'Background step failed',
+            copy: processing.error && processing.error.message
+              ? processing.error.message
+              : 'The background step failed before the next message was ready.'
+          };
+        }
+
+        return null;
+      }
+
+      function clearProcessingPoll() {
+        if (processingPollTimer) {
+          clearTimeout(processingPollTimer);
+          processingPollTimer = null;
+        }
+      }
+
+      async function pollCurrentSession(sessionId) {
+        if (!window.currentSessionId || window.currentSessionId !== sessionId) {
+          clearProcessingPoll();
+          return;
+        }
+
+        try {
+          const previousSession = currentSessionSnapshot;
+          const nextSession = await api('GET', `/api/sessions/${sessionId}`);
+          const wasRunning = isAnyProcessing(previousSession);
+          const isRunningNow = isAnyProcessing(nextSession);
+          const failedNow = getSessionProcessing(nextSession) && getSessionProcessing(nextSession).state === 'failed';
+
+          await renderSession(nextSession);
+
+          if (wasRunning && !isRunningNow && !failedNow) {
+            if (nextSession.currentMessage && nextSession.currentMessage.type === 'question') {
+              flashRequestSuccess(
+                'Moved to the next question',
+                'The background step finished and the graph advanced to the next active question.'
+              );
+            } else if (nextSession.currentMessage && nextSession.currentMessage.type === 'artifact_ready') {
+              flashRequestSuccess(
+                'Round complete',
+                'The background step finished and the result is now attached to the current topic.'
+              );
+            } else if (nextSession.currentMessage && nextSession.currentMessage.type === 'summary') {
+              flashRequestSuccess(
+                'Summary is ready',
+                'The background step finished and the current result is ready to review.'
+              );
+            }
+          }
+        } catch (error) {
+          setRequestState({
+            phase: 'error',
+            scope: 'processing',
+            title: 'Refreshing session failed',
+            copy: error.message,
+            retry: () => pollCurrentSession(sessionId)
+          });
+        }
+      }
+
+      function scheduleProcessingPoll(session) {
+        clearProcessingPoll();
+        if (!isAnyProcessing(session) || !session || !session.id) {
+          return;
+        }
+        processingPollTimer = setTimeout(() => {
+          pollCurrentSession(session.id);
+        }, PROCESSING_POLL_MS);
+      }
+
+      function applyInteractiveState() {
+        setCreateControlsDisabled(requestState.phase === 'pending' && requestState.scope === 'create');
+        setAnswerControlsDisabled(
+          (requestState.phase === 'pending' && requestState.scope === 'submit')
+          || isSubmitProcessing(currentSessionSnapshot)
+        );
+      }
+
+      function renderRequestStatus() {
+        const effectiveState = requestState.phase !== 'idle'
+          ? requestState
+          : getDerivedRequestState(currentSessionSnapshot);
+
+        if (!effectiveState || effectiveState.phase === 'idle') {
+          requestStatusPanelEl.hidden = true;
+          requestStatusPanelEl.dataset.state = 'idle';
+          requestStatusRetryEl.hidden = true;
+          requestStatusRetryEl.onclick = null;
+          return;
+        }
+
+        requestStatusPanelEl.hidden = false;
+        requestStatusPanelEl.dataset.state = effectiveState.phase;
+        requestStatusTitleEl.textContent = effectiveState.title || 'Submitting answer';
+        requestStatusCopyEl.textContent = effectiveState.copy || 'Submitting answer. Please wait.';
+
+        if (effectiveState.phase === 'error' && effectiveState.retry) {
+          requestStatusRetryEl.hidden = false;
+          requestStatusRetryEl.onclick = () => {
+            const retry = effectiveState.retry;
+            if (typeof retry === 'function') {
+              retry();
+            }
+          };
+        } else {
+          requestStatusRetryEl.hidden = true;
+          requestStatusRetryEl.onclick = null;
+        }
+      }
+
+      function setRequestState(nextState) {
+        if (requestStatusTimer) {
+          clearTimeout(requestStatusTimer);
+          requestStatusTimer = null;
+        }
+        requestState = {
+          phase: nextState && nextState.phase ? nextState.phase : 'idle',
+          scope: nextState && nextState.scope ? nextState.scope : null,
+          title: nextState && nextState.title ? nextState.title : '',
+          copy: nextState && nextState.copy ? nextState.copy : '',
+          retry: nextState && typeof nextState.retry === 'function' ? nextState.retry : null
+        };
+        renderRequestStatus();
+        applyInteractiveState();
+      }
+
+      function clearRequestState() {
+        setRequestState({ phase: 'idle' });
+      }
+
+      function flashRequestSuccess(title, copy, durationMs) {
+        setRequestState({
+          phase: 'success',
+          scope: 'transition',
+          title,
+          copy
+        });
+        requestStatusTimer = setTimeout(() => {
+          clearRequestState();
+        }, typeof durationMs === 'number' ? durationMs : 2400);
       }
 
       function setHeader(view, session) {
         const message = session && session.currentMessage ? session.currentMessage : null;
         titleEl.textContent = session && session.seedPrompt
           ? truncateSeed(session.seedPrompt)
-          : 'One live question, visible branch path.';
+          : 'One active node inside a visible tree.';
 
         if (!session || !message) {
-          subtitleEl.textContent = 'Keep one active node in focus while the branch path stays visible.';
+          subtitleEl.textContent = 'Start from one real topic, keep one active node, and let the result converge on the same canvas.';
         } else if (view.mode === 'completion') {
-          subtitleEl.textContent = 'This round is complete. The finished result stays inside the same workbench, alongside its path and package.';
+          subtitleEl.textContent = 'The artifact stays attached to the same topic-rooted canvas instead of collapsing into a result page.';
         } else if (view.mode === 'summary') {
-          subtitleEl.textContent = 'The session has converged. Review the recommendation without losing the branch path that led to it.';
+          subtitleEl.textContent = 'This round has converged. Review the result without losing the path that led to it.';
         } else if (view.mode === 'review') {
-          subtitleEl.textContent = 'A review checkpoint is active. The active node stays primary while the draft and path remain inspectable.';
+          subtitleEl.textContent = 'A review checkpoint is active. The approval node stays inside the graph while the draft remains secondary.';
         } else {
-          subtitleEl.textContent = 'Answer the one active node. The tree and context panels stay visible, but they do not compete for input.';
+          subtitleEl.textContent = 'Answer the current focus directly inside the graph.';
         }
       }
 
@@ -844,9 +1300,31 @@
         workspaceModeOverviewEl.setAttribute('aria-pressed', mode === 'overview' ? 'true' : 'false');
       }
 
-      function renderStageStrip(view) {
+      function renderStageStrip(view, session) {
         const stage = view.stage || null;
+        const processing = getSessionProcessing(session);
+        if (processing && processing.state === 'running') {
+          stageTitleEl.textContent = processing.action === 'create'
+            ? 'Preparing the session'
+            : 'Processing in background';
+          stageCopyEl.textContent = processing.action === 'create'
+            ? 'The first runtime turn is still running. You can switch sessions or leave the page and return later.'
+            : 'The current answer has been accepted. The graph will advance when the background turn finishes.';
+          return;
+        }
+        if (processing && processing.state === 'failed') {
+          stageTitleEl.textContent = 'Background step failed';
+          stageCopyEl.textContent = processing.error && processing.error.message
+            ? processing.error.message
+            : 'The last background step failed before the next message was ready.';
+          return;
+        }
         if (!stage) {
+          if (session && session.currentMessage) {
+            stageTitleEl.textContent = 'Runtime-driven session';
+            stageCopyEl.textContent = 'This session is following the live Codex + skills path directly. The UI is only showing graph state, branch state, and result exports.';
+            return;
+          }
           stageTitleEl.textContent = 'Waiting for a real topic';
           stageCopyEl.textContent = 'Start a session to see the current workflow stage and checkpoint context here.';
           return;
@@ -855,204 +1333,121 @@
         stageCopyEl.textContent = stage.description || 'The workbench keeps this stage visible without exposing protocol jargon.';
       }
 
-      function renderActiveStage(view) {
-        const stage = view.canvasWorkspace && view.canvasWorkspace.activeStage
-          ? view.canvasWorkspace.activeStage
+      function renderGraphSummary(view) {
+        const graph = view.canvasWorkspace && view.canvasWorkspace.graphWorkspace
+          ? view.canvasWorkspace.graphWorkspace
           : null;
-
-        if (!stage) {
-          activeStageKickerEl.textContent = 'Active Node';
-          activeStageTitleEl.textContent = 'Start with one real problem.';
-          activeStageCopyEl.textContent = 'Use the secondary topic dock to begin a new brainstorming session.';
-          activeStageMetaEl.innerHTML = '';
-          return;
-        }
-
-        activeStageKickerEl.textContent = stage.label || 'Active Node';
-        activeStageTitleEl.textContent = stage.title || 'Current node';
-        activeStageCopyEl.textContent = stage.description || 'Answer the current node to continue.';
-        activeStageMetaEl.innerHTML = (Array.isArray(stage.metaPills) ? stage.metaPills : []).map((item) => (
-          `<span class="meta-pill">${escapeHtml(item)}</span>`
-        )).join('');
-      }
-
-      function renderTreeGroup(title, nodes) {
-        if (!Array.isArray(nodes) || nodes.length === 0) {
-          return '';
-        }
-        const items = nodes.map((node) => (
-          `<button class="tree-node${node.isActive ? ' active' : ''}${node.id === inspectedCardId ? ' selected' : ''}" data-node-id="${escapeHtml(node.id)}" type="button">` +
-            (node.badge ? `<div class="tree-node-badge">${escapeHtml(node.badge)}</div>` : '') +
-            `<strong>${escapeHtml(node.title || node.label || 'Node')}</strong>` +
-            `<span>${escapeHtml(node.body || node.previewText || '')}</span>` +
-          `</button>`
-        )).join('');
-
-        return (
-          `<section class="tree-group">` +
-            `<h4 class="tree-group-title">${escapeHtml(title)}</h4>` +
-            `<div class="tree-node-list">${items}</div>` +
-          `</section>`
-        );
-      }
-
-      function renderDecisionTree(view, session) {
-        const tree = view.canvasWorkspace && view.canvasWorkspace.decisionTree
-          ? view.canvasWorkspace.decisionTree
-          : null;
-
-        if (!tree) {
-          treeSummaryEl.textContent = 'Open a session to see the current path, adjacent directions, and finished nodes.';
-          treeListEl.innerHTML = '<div class="path-note">The branch path appears here once the first formal question is active.</div>';
+        if (!graph) {
+          treeSummaryEl.textContent = 'Open a session to see the topic root, active node, branches, and convergence graph.';
           historyToggleButtonEl.hidden = true;
           return;
         }
-
-        const pathCount = Array.isArray(tree.pathNodes) ? Math.max(tree.pathNodes.length - 1, 0) : 0;
-        treeSummaryEl.textContent = `${pathCount} visible path node${pathCount === 1 ? '' : 's'}${tree.hiddenCount ? `, ${tree.hiddenCount} hidden by default` : ''}.`;
+        const nodeCount = Array.isArray(graph.nodes) ? graph.nodes.length : 0;
+        const edgeCount = Array.isArray(graph.edges) ? graph.edges.length : 0;
+        const visibleSteps = view.history && Array.isArray(view.history.visibleEntries) ? view.history.visibleEntries.length : 0;
+        const branchCount = graph.nodes.filter((node) => node.type === 'branch').length;
+        const completionCount = graph.nodes.filter((node) => node.type === 'convergence' || node.type === 'artifact').length;
+        treeSummaryEl.textContent = `${nodeCount} graph nodes, ${edgeCount} edges, ${visibleSteps} visible path steps, ${branchCount} branches${completionCount ? `, ${completionCount} completion nodes` : ''}.`;
         historyToggleButtonEl.hidden = !view.history.canExpand && !view.history.expanded;
         historyToggleButtonEl.textContent = view.history.expanded ? 'Collapse History' : 'Open Full History';
-
-        const blocks = [
-          renderTreeGroup('Current Path', tree.pathNodes),
-          renderTreeGroup('Adjacent Directions', tree.contextNodes),
-          renderTreeGroup('Finished Result', tree.resultNodes)
-        ].filter(Boolean);
-
-        treeListEl.innerHTML = blocks.length
-          ? blocks.join('')
-          : '<div class="empty-copy">Once the session begins, the visible branch path will form here.</div>';
-
-        Array.from(treeListEl.querySelectorAll('[data-node-id]')).forEach((el) => {
-          el.addEventListener('click', () => {
-            const nextId = el.getAttribute('data-node-id');
-            inspectedCardId = nextId === inspectedCardId ? null : nextId;
-            renderSession(currentSessionSnapshot).catch((error) => {
-              rootEl.innerHTML = `<div class="empty-stage"><strong>Failed to inspect node</strong><p>${escapeHtml(error.message)}</p></div>`;
-            });
-          });
-        });
       }
 
-      function renderContextPanel(view) {
-        const panel = view.canvasWorkspace && view.canvasWorkspace.contextPanel
-          ? view.canvasWorkspace.contextPanel
+      function renderInspector(view) {
+        const inspector = view.canvasWorkspace && view.canvasWorkspace.inspector
+          ? view.canvasWorkspace.inspector
           : null;
-        const selectedNode = panel && panel.selectedNode ? panel.selectedNode : null;
+        const selectedNode = inspector && inspector.selectedNode ? inspector.selectedNode : null;
 
         if (!selectedNode) {
           selectedNodeTitleEl.textContent = 'No node selected';
-          selectedNodeBodyEl.textContent = view.mode === 'empty'
-            ? 'Select a branch node, checkpoint, or result section to inspect it here.'
-            : 'The most relevant supporting node will appear here as soon as the workbench has more context.';
+          selectedNodeBodyEl.textContent = 'Select a node in the graph to inspect it here.';
         } else {
           selectedNodeTitleEl.textContent = selectedNode.title || 'Selected node';
           selectedNodeBodyEl.textContent = selectedNode.previewText || selectedNode.body || '';
         }
 
-        const sections = panel && Array.isArray(panel.sections)
-          ? panel.sections.filter((section) => section.kind !== 'selected-node')
+        const sections = inspector && Array.isArray(inspector.sections)
+          ? inspector.sections.filter((section) => section.kind !== 'selected-node')
           : [];
-
         contextSectionListEl.innerHTML = sections.map((section) => (
-          `<article class="context-section-card">` +
+          `<section class="inspector-card">` +
             `<div class="panel-label">${escapeHtml(section.kind.replace(/-/g, ' '))}</div>` +
             `<strong>${escapeHtml(section.title || 'Context')}</strong>` +
-            `<div class="body">${escapeHtml(section.body || '')}</div>` +
-          `</article>`
+            `<div class="inspector-body">${escapeHtml(section.body || '')}</div>` +
+          `</section>`
         )).join('');
       }
 
-      function renderCompletionSurface(view) {
-        if (!view.completion) {
-          completionSurfaceEl.hidden = true;
-          supportingPackagePanelEl.hidden = true;
-          completionHeroEl.innerHTML = '';
-          completionSectionGridEl.innerHTML = '';
-          completionPackageGridEl.innerHTML = '';
-          return;
-        }
-
-        completionSurfaceEl.hidden = false;
-        completionTitleEl.textContent = view.completion.title || 'Finished result';
-        completionClusterCopyEl.textContent = view.completion.description || 'Review the finished result, then inspect or export the supporting package.';
-
-        const exportPaths = view.completion.exportPaths || {};
-        completionActionRowEl.hidden = !exportPaths.markdownPath && !exportPaths.jsonPath;
-        completionExportMarkdownEl.hidden = !exportPaths.markdownPath;
-        completionExportJsonEl.hidden = !exportPaths.jsonPath;
-        completionExportMarkdownEl.href = exportPaths.markdownPath || '#';
-        completionExportJsonEl.href = exportPaths.jsonPath || '#';
-
-        completionHeroEl.innerHTML = (
-          `<article class="result-card hero">` +
-            `<div class="tree-node-badge">Recommendation</div>` +
-            `<strong>${escapeHtml(view.completion.recommendationTitle || view.completion.title || 'Finished result')}</strong>` +
-            `<div class="artifact-block">${escapeHtml(view.completion.recommendationSummary || view.completion.description || '')}</div>` +
-          `</article>`
-        );
-
-        completionSectionGridEl.innerHTML = (view.completion.sections || []).map((section) => (
-          `<article class="result-card">` +
-            `<div class="tree-node-badge">Result Section</div>` +
-            `<strong>${escapeHtml(section.title || 'Section')}</strong>` +
-            `<div class="artifact-block">${escapeHtml((section.items || []).join('\n'))}</div>` +
-          `</article>`
-        )).join('');
-
-        const packages = view.completion.supportingArtifacts || [];
+      function renderSupportingPackage(view) {
+        const packages = view.completion && Array.isArray(view.completion.supportingArtifacts)
+          ? view.completion.supportingArtifacts
+          : [];
         supportingPackagePanelEl.hidden = packages.length === 0;
         completionPackageGridEl.innerHTML = packages.map((artifact) => (
           `<article class="package-card">` +
             `<div class="tree-node-badge">${escapeHtml(artifact.label || artifact.kind || 'Artifact')}</div>` +
             `<strong>${escapeHtml(artifact.title || 'Supporting artifact')}</strong>` +
             `<div class="artifact-block">${escapeHtml(artifact.previewText || '')}</div>` +
-            `<div class="path">${escapeHtml(artifact.path || '')}</div>` +
+            `<div class="package-path">${escapeHtml(artifact.path || '')}</div>` +
           `</article>`
         )).join('');
       }
 
-      function renderEmptyStage() {
-        const emptyView = window.brainstormMainstage.deriveMainstageView(null, {
-          workspaceMode: 'focused'
-        });
-        window.currentSessionId = null;
-        currentSessionSnapshot = null;
-        historyExpanded = false;
-        workspaceMode = 'focused';
-        inspectedCardId = null;
-        setHeader(emptyView, null);
-        renderWorkspaceMode(emptyView);
-        renderStageStrip(emptyView);
-        renderActiveStage(emptyView);
-        renderDecisionTree(emptyView, null);
-        renderContextPanel(emptyView);
-        renderCompletionSurface(emptyView);
-        rootEl.innerHTML = (
-          `<div class="empty-stage">` +
-            `<div class="panel-label">Active Node</div>` +
-            `<h3 class="active-stage-title">A workbench waits for a real problem.</h3>` +
-            `<p class="active-stage-copy">Start a new session and the current question will appear here, while the branch path and supporting context accumulate around it.</p>` +
-          `</div>`
-        );
-      }
-
       function renderSessionList(items) {
+        if (pendingDeleteSessionId && !items.some((session) => session.id === pendingDeleteSessionId)) {
+          pendingDeleteSessionId = null;
+        }
+
         if (!items.length) {
           sessionListEl.innerHTML = '<div class="session-item"><strong>No sessions yet</strong><span>Start a topic to populate the workbench rail.</span></div>';
           return;
         }
 
         sessionListEl.innerHTML = items.map((session) => (
+          (() => {
+            const processing = session.processing && typeof session.processing === 'object'
+              ? session.processing
+              : null;
+            const secondaryLabel = processing && processing.state === 'running'
+              ? `${processing.action === 'create' ? 'creating' : 'processing'} · ${session.completionMode || 'artifact'}`
+              : (processing && processing.state === 'failed'
+                ? `failed · ${session.completionMode || 'artifact'}`
+                : `${session.workflowStageLabel || session.workflowStage || session.currentMessageType || 'active'} · ${session.completionMode || 'artifact'}`);
+            return (
           `<div class="session-item${session.id === window.currentSessionId ? ' active' : ''}" data-session-id="${escapeHtml(session.id)}">` +
-            `<strong>${escapeHtml(session.seedPrompt ? truncateSeed(session.seedPrompt) : `Session ${session.id.slice(0, 8)}`)}</strong>` +
-            `<span>${escapeHtml(session.workflowStageLabel || session.workflowStage || session.currentMessageType || 'active')} · ${escapeHtml(session.completionMode || 'artifact')}</span>` +
+            `<div class="session-item-shell">` +
+              `<div class="session-item-copy">` +
+                `<strong>${escapeHtml(session.seedPrompt ? truncateSeed(session.seedPrompt) : `Session ${session.id.slice(0, 8)}`)}</strong>` +
+                `<span>${escapeHtml(secondaryLabel)}</span>` +
+              `</div>` +
+              `<button class="session-delete-button${session.id === pendingDeleteSessionId ? ' armed' : ''}" type="button" data-delete-session-id="${escapeHtml(session.id)}">${session.id === pendingDeleteSessionId ? 'Confirm Delete' : 'Delete'}</button>` +
+            `</div>` +
           `</div>`
+            );
+          })()
         )).join('');
 
         Array.from(sessionListEl.querySelectorAll('[data-session-id]')).forEach((el) => {
           el.addEventListener('click', () => {
             loadSession(el.getAttribute('data-session-id'));
+          });
+        });
+
+        Array.from(sessionListEl.querySelectorAll('[data-delete-session-id]')).forEach((el) => {
+          el.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const sessionId = el.getAttribute('data-delete-session-id');
+            if (!sessionId) {
+              return;
+            }
+            if (pendingDeleteSessionId !== sessionId) {
+              pendingDeleteSessionId = sessionId;
+              renderSessionList(items);
+              return;
+            }
+            pendingDeleteSessionId = null;
+            renderSessionList(items);
+            deleteSession(sessionId);
           });
         });
       }
@@ -1061,6 +1456,133 @@
         const sessions = await api('GET', '/api/sessions');
         renderSessionList(sessions);
         return sessions;
+      }
+
+      async function deleteSession(sessionId) {
+        setRequestState({
+          phase: 'pending',
+          scope: 'delete',
+          title: 'Deleting session',
+          copy: 'Removing the selected session from the rail...'
+        });
+
+        try {
+          await api('DELETE', `/api/sessions/${sessionId}`);
+          pendingDeleteSessionId = null;
+          const sessions = await refreshSessionList();
+
+          if (window.currentSessionId === sessionId) {
+            if (sessions.length > 0) {
+              await loadSession(sessions[0].id);
+            } else {
+              renderEmptyStage();
+            }
+          }
+
+          flashRequestSuccess(
+            'Session deleted',
+            'The selected session was removed from the rail.',
+            1400
+          );
+        } catch (error) {
+          pendingDeleteSessionId = null;
+          setRequestState({
+            phase: 'error',
+            scope: 'delete',
+            title: 'Deleting session failed',
+            copy: error.message,
+            retry: () => deleteSession(sessionId)
+          });
+        }
+      }
+
+      async function selectBranchContext(sessionId, branchRunId) {
+        return api('POST', `/api/sessions/${sessionId}/context`, {
+          branchRunId: branchRunId || null
+        });
+      }
+
+      function ensureGraphClient(view) {
+        if (!window.BrainstormGraphClient || typeof window.BrainstormGraphClient.mountGraphClient !== 'function') {
+          throw new Error('Graph client did not load.');
+        }
+
+        const graph = view.canvasWorkspace && view.canvasWorkspace.graphWorkspace
+          ? view.canvasWorkspace.graphWorkspace
+          : { nodes: [], edges: [], focusNodeId: null, selectedNodeId: null };
+
+        const props = {
+          graph,
+          onAnswer(answer) {
+            if (!window.currentSessionId || requestState.phase === 'pending' || isSubmitProcessing(currentSessionSnapshot)) {
+              return;
+            }
+            submitAnswer(window.currentSessionId, answer);
+          },
+          async onInspect(nodeId) {
+            inspectedCardId = nodeId === inspectedCardId ? null : nodeId;
+            try {
+              const mainlineRoundId = currentSessionSnapshot
+                && currentSessionSnapshot.roundGraph
+                && currentSessionSnapshot.roundGraph.currentMainlineRoundId
+                ? currentSessionSnapshot.roundGraph.currentMainlineRoundId
+                : null;
+              const selectedBranchRunId = currentSessionSnapshot
+                && currentSessionSnapshot.strategyState
+                && currentSessionSnapshot.strategyState.selectedBranchRunId
+                ? currentSessionSnapshot.strategyState.selectedBranchRunId
+                : null;
+
+              if (window.currentSessionId && nodeId && nodeId.startsWith('branch-run-')) {
+                const session = await selectBranchContext(window.currentSessionId, nodeId);
+                await renderSession(session);
+                return;
+              }
+
+              if (window.currentSessionId && selectedBranchRunId && mainlineRoundId && nodeId === mainlineRoundId) {
+                const session = await selectBranchContext(window.currentSessionId, null);
+                await renderSession(session);
+                return;
+              }
+
+              await renderSession(currentSessionSnapshot);
+            } catch (error) {
+              setRequestState({
+                phase: 'error',
+                scope: 'view',
+                title: 'Failed to inspect node',
+                copy: error.message,
+                retry: () => renderSession(currentSessionSnapshot)
+              });
+            }
+          }
+        };
+
+        if (!graphClient) {
+          graphClient = window.BrainstormGraphClient.mountGraphClient(graphRootEl, props);
+        } else {
+          graphClient.render(props);
+        }
+      }
+
+      function renderEmptyStage() {
+        const emptyView = window.brainstormMainstage.deriveMainstageView(null, {
+          workspaceMode: 'focused'
+        });
+        clearProcessingPoll();
+        window.currentSessionId = null;
+        currentSessionSnapshot = null;
+        historyExpanded = false;
+        workspaceMode = 'focused';
+        inspectedCardId = null;
+        clearRequestState();
+        setHeader(emptyView, null);
+        renderWorkspaceMode(emptyView);
+        renderStageStrip(emptyView, null);
+        renderGraphSummary(emptyView);
+        ensureGraphClient(emptyView);
+        renderInspector(emptyView);
+        renderSupportingPackage(emptyView);
       }
 
       async function renderSession(session) {
@@ -1080,40 +1602,61 @@
 
         setHeader(view, session);
         renderWorkspaceMode(view);
-        renderStageStrip(view);
-        renderActiveStage(view);
-        renderDecisionTree(view, session);
-        renderContextPanel(view);
-        renderCompletionSurface(view);
-
-        if (view.mode === 'completion' || view.mode === 'summary') {
-          rootEl.innerHTML = (
-            `<div class="empty-stage">` +
-              `<div class="panel-label">Active Node</div>` +
-              `<h3 class="active-stage-title">${escapeHtml(view.currentDecision.title || 'Finished result')}</h3>` +
-              `<p class="active-stage-copy">${escapeHtml(view.currentDecision.description || 'Review the finished result and inspect the supporting package from the context panel.')}</p>` +
-            `</div>`
-          );
-        } else {
-          host.renderMessage(session.currentMessage);
-        }
-
+        renderStageStrip(view, session);
+        renderGraphSummary(view);
+        ensureGraphClient(view);
+        renderInspector(view);
+        renderSupportingPackage(view);
+        applyInteractiveState();
         await refreshSessionList();
+        scheduleProcessingPoll(session);
       }
 
       async function createSession(completionMode, initialPrompt) {
-        const session = await api('POST', '/api/sessions', {
-          completionMode,
-          initialPrompt,
-          workflowMode: 'full_skill'
+        const title = completionMode === 'artifact'
+          ? 'Creating artifact session'
+          : 'Creating summary session';
+        const copy = completionMode === 'artifact'
+          ? 'Creating artifact session. The first real-runtime step can take a while; please wait.'
+          : 'Creating summary session. The first real-runtime step can take a while; please wait.';
+
+        setRequestState({
+          phase: 'pending',
+          scope: 'create',
+          title,
+          copy
         });
-        historyExpanded = false;
-        workspaceMode = 'focused';
-        inspectedCardId = null;
-        await renderSession(session);
+
+        try {
+          const session = await api('POST', '/api/sessions', {
+            completionMode,
+            initialPrompt
+          });
+          historyExpanded = false;
+          workspaceMode = 'focused';
+          inspectedCardId = null;
+          await renderSession(session);
+          if (isAnyProcessing(session)) {
+            clearRequestState();
+          } else {
+            flashRequestSuccess(
+              'Session is ready',
+              'The graph is ready and focused on the first active question.',
+              1800
+            );
+          }
+        } catch (error) {
+          setRequestState({
+            phase: 'error',
+            scope: 'create',
+            title: 'Creating session failed',
+            copy: error.message,
+            retry: () => createSession(completionMode, initialPrompt)
+          });
+        }
       }
 
-      async function startFromPersistentComposer(completionMode) {
+      function startFromPersistentComposer(completionMode) {
         const initialPrompt = readPersistentSeed();
         if (!initialPrompt) {
           persistentSeedErrorEl.hidden = false;
@@ -1121,26 +1664,86 @@
           return;
         }
         persistentSeedErrorEl.hidden = true;
-        await createSession(completionMode, initialPrompt);
+        createSession(completionMode, initialPrompt);
       }
 
       async function loadSession(sessionId) {
-        const session = await api('GET', `/api/sessions/${sessionId}`);
-        historyExpanded = false;
-        workspaceMode = 'focused';
-        inspectedCardId = null;
-        await renderSession(session);
+        try {
+          const session = await api('GET', `/api/sessions/${sessionId}`);
+          historyExpanded = false;
+          workspaceMode = 'focused';
+          inspectedCardId = null;
+          clearRequestState();
+          await renderSession(session);
+        } catch (error) {
+          setRequestState({
+            phase: 'error',
+            scope: 'load',
+            title: 'Loading session failed',
+            copy: error.message,
+            retry: () => loadSession(sessionId)
+          });
+        }
       }
 
       async function submitAnswer(sessionId, answer) {
-        const session = await api('POST', `/api/sessions/${sessionId}/answers`, answer);
-        inspectedCardId = null;
-        await renderSession(session);
+        setRequestState({
+          phase: 'pending',
+          scope: 'submit',
+          title: answer && answer.type === 'branch_materialize'
+            ? 'Creating branch runs'
+            : 'Submitting answer',
+          copy: answer && answer.type === 'branch_materialize'
+            ? 'Turning the selected shortlist into real branch runs...'
+            : 'Submitting answer. Waiting for the next backend step...'
+        });
+
+        try {
+          const session = await api('POST', `/api/sessions/${sessionId}/answers`, answer);
+          workspaceMode = 'focused';
+          historyExpanded = false;
+          inspectedCardId = null;
+          await renderSession(session);
+          if (isAnyProcessing(session)) {
+            clearRequestState();
+          } else if (answer && answer.type === 'branch_materialize') {
+            flashRequestSuccess(
+              'Branches are ready',
+              'The selected shortlist is now available as real branch runs on the canvas.'
+            );
+          } else if (session.currentMessage && session.currentMessage.type === 'question') {
+            flashRequestSuccess(
+              'Moved to the next question',
+              'The graph advanced to the next question and refocused the active node.'
+            );
+          } else if (session.currentMessage && session.currentMessage.type === 'artifact_ready') {
+            flashRequestSuccess(
+              'Round complete',
+              'The graph converged and attached the finished result to the current topic.'
+            );
+          } else if (session.currentMessage && session.currentMessage.type === 'summary') {
+            flashRequestSuccess(
+              'Summary is ready',
+              'The graph converged and the current result is ready to review.'
+            );
+          } else {
+            clearRequestState();
+          }
+        } catch (error) {
+          setRequestState({
+            phase: 'error',
+            scope: 'submit',
+            title: 'Submitting answer failed',
+            copy: error.message,
+            retry: () => submitAnswer(sessionId, answer)
+          });
+        }
       }
 
       document.getElementById('persistent-start-artifact').addEventListener('click', () => {
         startFromPersistentComposer('artifact');
       });
+
       document.getElementById('persistent-start-summary').addEventListener('click', () => {
         startFromPersistentComposer('summary');
       });
@@ -1148,24 +1751,42 @@
       workspaceModeFocusedEl.addEventListener('click', () => {
         workspaceMode = 'focused';
         renderSession(currentSessionSnapshot).catch((error) => {
-          rootEl.innerHTML = `<div class="empty-stage"><strong>Failed to update workspace</strong><p>${escapeHtml(error.message)}</p></div>`;
+          setRequestState({
+            phase: 'error',
+            scope: 'view',
+            title: 'Updating graph failed',
+            copy: error.message,
+            retry: () => renderSession(currentSessionSnapshot)
+          });
         });
       });
 
       workspaceModeOverviewEl.addEventListener('click', () => {
         workspaceMode = 'overview';
         renderSession(currentSessionSnapshot).catch((error) => {
-          rootEl.innerHTML = `<div class="empty-stage"><strong>Failed to update workspace</strong><p>${escapeHtml(error.message)}</p></div>`;
+          setRequestState({
+            phase: 'error',
+            scope: 'view',
+            title: 'Updating graph failed',
+            copy: error.message,
+            retry: () => renderSession(currentSessionSnapshot)
+          });
         });
       });
 
       historyToggleButtonEl.addEventListener('click', () => {
-        if (!currentSessionSnapshot) {
+        if (!currentSessionSnapshot || requestState.phase === 'pending') {
           return;
         }
         historyExpanded = !historyExpanded;
         renderSession(currentSessionSnapshot).catch((error) => {
-          rootEl.innerHTML = `<div class="empty-stage"><strong>Failed to update history</strong><p>${escapeHtml(error.message)}</p></div>`;
+          setRequestState({
+            phase: 'error',
+            scope: 'view',
+            title: 'Updating history failed',
+            copy: error.message,
+            retry: () => renderSession(currentSessionSnapshot)
+          });
         });
       });
 
@@ -1178,7 +1799,14 @@
           return null;
         })
         .catch((error) => {
-          rootEl.innerHTML = `<div class="empty-stage"><strong>Failed to load app</strong><p>${escapeHtml(error.message)}</p></div>`;
+          setRequestState({
+            phase: 'error',
+            scope: 'load',
+            title: 'Failed to load app',
+            copy: error.message,
+            retry: () => window.location.reload()
+          });
+          graphRootEl.innerHTML = `<div class="empty-stage"><strong>Failed to load app</strong><p>${escapeHtml(error.message)}</p></div>`;
         });
     });
   </script>

@@ -16,38 +16,35 @@ const DEFAULT_DISABLED_FEATURES = Object.freeze([
 
 function buildRuntimeOutputSchema() {
   return {
-    type: 'object',
-    required: [
-      'type',
-      'questionType',
-      'questionId',
-      'title',
-      'description',
-      'options',
-      'allowTextOverride',
-      'textOverrideLabel'
-    ],
-    properties: {
-      type: { const: 'question' },
-      questionType: { enum: ['pick_one', 'pick_many', 'confirm', 'ask_text'] },
-      questionId: { type: 'string' },
-      title: { type: 'string' },
-      description: { type: 'string' },
-      options: {
-        type: 'array',
-        items: {
-          type: 'object',
-          required: ['id', 'label', 'description'],
-          properties: {
-            id: { type: 'string' },
-            label: { type: 'string' },
-            description: { type: 'string' }
-          }
+    oneOf: [
+      {
+        type: 'object',
+        additionalProperties: true,
+        required: ['type', 'title'],
+        properties: {
+          type: { const: 'question' },
+          title: { type: 'string' }
         }
       },
-      allowTextOverride: { type: 'boolean' },
-      textOverrideLabel: { type: 'string' }
-    }
+      {
+        type: 'object',
+        additionalProperties: true,
+        required: ['type', 'text'],
+        properties: {
+          type: { const: 'summary' },
+          text: { type: 'string' }
+        }
+      },
+      {
+        type: 'object',
+        additionalProperties: true,
+        required: ['type', 'title'],
+        properties: {
+          type: { const: 'artifact_ready' },
+          title: { type: 'string' }
+        }
+      }
+    ]
   };
 }
 

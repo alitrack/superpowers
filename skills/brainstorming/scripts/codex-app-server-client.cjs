@@ -1,7 +1,7 @@
 const { EventEmitter } = require('events');
 const { spawn } = require('child_process');
 
-const REQUEST_TIMEOUT_MS = 15000;
+const REQUEST_TIMEOUT_MS = 60000;
 const DEFAULT_CODEX_MODEL = 'gpt-5.3-codex';
 const DEFAULT_REASONING_EFFORT = 'low';
 const DEFAULT_REASONING_SUMMARY = 'none';
@@ -23,6 +23,18 @@ function readOption(options, key) {
 function readStringEnv(name) {
   const value = process.env[name];
   return value ? value : undefined;
+}
+
+function readPositiveIntEnv(name) {
+  const raw = process.env[name];
+  if (!raw) {
+    return null;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  return Math.floor(parsed);
 }
 
 function getModelProviderOverride(options) {
@@ -118,7 +130,7 @@ function buildDefaultAppServerArgs(options) {
     args.push('-c', `service_tier="${serviceTier}"`);
   }
 
-  args.push('app-server', '--session-source', 'cli');
+  args.push('app-server');
   return args;
 }
 
@@ -132,7 +144,9 @@ function assignIfDefined(target, key, value) {
 function withTimeout(promise, ms, label) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
-      reject(new Error(`${label} timed out after ${ms}ms`));
+      const error = new Error(`${label} timed out after ${ms}ms`);
+      error.code = 'RUNTIME_TIMEOUT';
+      reject(error);
     }, ms);
 
     promise.then((value) => {
@@ -166,7 +180,9 @@ class CodexAppServerClient extends EventEmitter {
     this.env = options && options.env ? { ...options.env } : { ...process.env };
     this.cwd = options && options.cwd ? options.cwd : process.cwd();
     this.spawnImpl = options && options.spawnImpl ? options.spawnImpl : spawn;
-    this.requestTimeoutMs = options && options.requestTimeoutMs ? options.requestTimeoutMs : REQUEST_TIMEOUT_MS;
+    this.requestTimeoutMs = options && options.requestTimeoutMs
+      ? options.requestTimeoutMs
+      : (readPositiveIntEnv('BRAINSTORM_APP_SERVER_REQUEST_TIMEOUT_MS') || REQUEST_TIMEOUT_MS);
     this.defaultModelProvider = getModelProviderOverride(options);
     this.defaultModel = getModelOverride(options);
     this.defaultReasoningEffort = getReasoningEffortOverride(options);

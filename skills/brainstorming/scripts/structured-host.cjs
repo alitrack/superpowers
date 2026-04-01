@@ -350,6 +350,7 @@
     style.textContent = [
       '.structured-host { max-width: 100%; position: relative; z-index: 1; }',
       '.structured-host .question-card, .structured-host .summary-card-shell { background: rgba(255,255,255,0.72); border: 1px solid rgba(112, 84, 63, 0.12); border-radius: 30px; padding: 1.25rem 1.25rem 1.35rem; box-shadow: 0 24px 50px rgba(70, 44, 28, 0.07); }',
+      '.structured-host .question-card--compact { border-radius: 22px; padding: 0.7rem 0.75rem 0.78rem; box-shadow: none; background: rgba(255,255,255,0.68); }',
       '.structured-host .meta-row { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 1rem; }',
       '.structured-host .meta-pill { padding: 0.4rem 0.7rem; border-radius: 999px; background: rgba(255,255,255,0.74); border: 1px solid rgba(112, 84, 63, 0.14); color: var(--muted, #7b675a); font-size: 0.75rem; }',
       '.structured-host .label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent-deep, #66311d); margin-bottom: 0.7rem; }',
@@ -380,10 +381,21 @@
       '.structured-host .actions-row { display: flex; gap: 0.75rem; flex-wrap: wrap; padding-top: 0.15rem; }',
       '.structured-host .mock-button { appearance: none; border: 1px solid rgba(182, 84, 45, 0.22); background: linear-gradient(135deg, #b6542d, #d37339); color: white; border-radius: 999px; padding: 0.8rem 1.25rem; font: inherit; font-weight: 600; letter-spacing: 0.01em; box-shadow: 0 18px 28px rgba(139, 76, 46, 0.18); cursor: pointer; }',
       '.structured-host .mock-button:hover { filter: saturate(1.03) brightness(1.02); }',
+      '.structured-host .mock-button.secondary { background: rgba(255,255,255,0.9); color: var(--accent-deep, #66311d); box-shadow: none; }',
       '.structured-host .history-list { display: grid; gap: 0.75rem; margin-top: 1rem; }',
       '.structured-host .history-item { background: rgba(255,255,255,0.7); border: 1px solid rgba(112, 84, 63, 0.12); border-radius: 18px; padding: 0.95rem 1rem; }',
       '.structured-host .history-item strong { display: block; margin-bottom: 0.3rem; }',
-      '.structured-host .history-item span { color: var(--muted, #7b675a); line-height: 1.65; display: block; }'
+      '.structured-host .history-item span { color: var(--muted, #7b675a); line-height: 1.65; display: block; }',
+      '.structured-host .question-card--compact .question-form { gap: 0.72rem; }',
+      '.structured-host .question-card--compact .options { gap: 0.55rem; }',
+      '.structured-host .question-card--compact .option { padding: 0.68rem 0.78rem; border-radius: 18px; gap: 0.7rem; }',
+      '.structured-host .question-card--compact .option .letter { width: 1.72rem; height: 1.72rem; font-size: 0.72rem; }',
+      '.structured-host .question-card--compact .option .content h3 { font-size: 0.9rem; margin-bottom: 0.12rem; }',
+      '.structured-host .question-card--compact .option .content p { font-size: 0.82rem; line-height: 1.45; }',
+      '.structured-host .question-card--compact textarea { min-height: 86px; padding: 0.75rem 0.8rem; border-radius: 15px; }',
+      '.structured-host .question-card--compact .actions-row { gap: 0.5rem; padding-top: 0; }',
+      '.structured-host .question-card--compact .mock-button { padding: 0.58rem 0.95rem; font-size: 0.84rem; box-shadow: none; }',
+      '.structured-host .question-card--compact .helper-copy, .structured-host .question-card--compact .error-copy { font-size: 0.8rem; }'
     ].join('\n');
     document.head.appendChild(style);
   }
@@ -425,6 +437,8 @@
     const multi = question.questionType === QUESTION_TYPES.PICK_MANY;
     const allowText = question.questionType === QUESTION_TYPES.ASK_TEXT || question.allowTextOverride;
     const showMeta = Boolean(config.showMeta);
+    const readOnly = Boolean(config.readOnly);
+    const compact = Boolean(config.compact);
     const meta = [
       `<div class="meta-pill">type: ${escapeHtml(question.questionType)}</div>`,
       `<div class="meta-pill">questionId: ${escapeHtml(question.questionId)}</div>`
@@ -451,23 +465,39 @@
     const textMarkup = allowText
       ? `<div class="stack">` +
           `<label class="helper-copy" for="structured-answer-input">${escapeHtml(question.textOverrideLabel || 'Type an answer instead')}</label>` +
-          `<textarea id="structured-answer-input" data-role="text-input" placeholder="Type your answer here"></textarea>` +
+          `<textarea id="structured-answer-input" data-role="text-input" placeholder="Type your answer here"${readOnly ? ' readonly' : ''}></textarea>` +
         `</div>`
       : '';
-
-    return (
-      `<div class="structured-host">` +
-        `<div class="question-card">` +
+    const branchingAction = question.branching
+      && question.branching.branchable
+      && multi
+      ? `<button type="button" class="mock-button secondary" data-role="branch-materialize"${readOnly ? ' disabled' : ''}>${escapeHtml(question.branching.materializeActionLabel || 'Explore selected as branches')}</button>`
+      : '';
+    const headerMarkup = compact
+      ? ''
+      : (
           `<div class="label">Current Question</div>` +
           `<h2>${escapeHtml(question.title)}</h2>` +
-          `<p class="subtitle">${escapeHtml(question.description || '')}</p>` +
+          `<p class="subtitle">${escapeHtml(question.description || '')}</p>`
+        );
+    const helperMarkup = compact
+      ? ''
+      : `<div class="helper-copy">一次只回答一个正式问题。可以点选，也可以直接输入；如果你的答案超出选项，系统会保留你的原话。</div>`;
+
+    return (
+      `<div class="structured-host${readOnly ? ' structured-host--readonly' : ''}">` +
+        `<div class="question-card${compact ? ' question-card--compact' : ''}">` +
+          headerMarkup +
           (showMeta ? `<div class="meta-row">${meta.join('')}</div>` : '') +
           `<form class="question-form" data-role="question-form">` +
             optionMarkup +
             textMarkup +
-            `<div class="helper-copy">一次只回答一个正式问题。可以点选，也可以直接输入；如果你的答案超出选项，系统会保留你的原话。</div>` +
+            helperMarkup +
             `<div class="error-copy" data-role="error"></div>` +
-            `<div class="actions-row"><button type="submit" class="mock-button" data-role="submit">Continue</button></div>` +
+            `<div class="actions-row">` +
+              `<button type="submit" class="mock-button" data-role="submit"${readOnly ? ' disabled' : ''}>Continue</button>` +
+              branchingAction +
+            `</div>` +
           `</form>` +
         `</div>` +
       `</div>`
@@ -550,23 +580,30 @@
   function mountMessageHost(rootEl, config) {
     const onAnswer = typeof config.onAnswer === 'function' ? config.onAnswer : function() {};
     const showMeta = Boolean(config.showMeta);
+    const readOnly = Boolean(config.readOnly);
+    const compact = Boolean(config.compact);
     const document = rootEl.ownerDocument;
     ensureHostStyles(document);
 
     function renderMessage(message) {
       if (message.type === 'question') {
         const history = Array.isArray(message.history) ? message.history : [];
-        rootEl.innerHTML = buildQuestionMarkup(message, history, { showMeta });
+        rootEl.innerHTML = buildQuestionMarkup(message, history, { showMeta, readOnly, compact });
         setIndicator(message.title);
-        bindOptionInteractions(rootEl);
+        if (!readOnly) {
+          bindOptionInteractions(rootEl);
+        }
 
         const form = rootEl.querySelector('[data-role="question-form"]');
+        const errorEl = rootEl.querySelector('[data-role="error"]');
         form.addEventListener('submit', (event) => {
           event.preventDefault();
+          if (readOnly) {
+            return;
+          }
           const selectedOptionIds = Array.from(rootEl.querySelectorAll('.option.selected')).map((el) => el.getAttribute('data-option-id'));
           const textInput = rootEl.querySelector('[data-role="text-input"]');
           const text = textInput ? textInput.value : '';
-          const errorEl = rootEl.querySelector('[data-role="error"]');
           const normalized = normalizeAnswer(message, {
             selectedOptionIds,
             text,
@@ -574,18 +611,48 @@
           });
 
           if (normalized.status === 'invalid') {
-            errorEl.textContent = 'Provide a selection or type an answer to continue.';
+            if (errorEl) errorEl.textContent = 'Provide a selection or type an answer to continue.';
             return;
           }
 
           if (normalized.status === 'ambiguous') {
-            errorEl.textContent = 'That text matches multiple options. Select directly or clarify your wording.';
+            if (errorEl) errorEl.textContent = 'That text matches multiple options. Select directly or clarify your wording.';
             return;
           }
 
-          errorEl.textContent = '';
+          if (errorEl) errorEl.textContent = '';
           onAnswer(normalized.answer);
         });
+
+        const branchMaterializeButton = rootEl.querySelector('[data-role="branch-materialize"]');
+        if (branchMaterializeButton) {
+          branchMaterializeButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            if (readOnly) {
+              return;
+            }
+            const selectedOptionIds = Array.from(rootEl.querySelectorAll('.option.selected')).map((el) => el.getAttribute('data-option-id'));
+            const textInput = rootEl.querySelector('[data-role="text-input"]');
+            const text = textInput ? textInput.value : '';
+            const minimum = message.branching && typeof message.branching.minOptionCount === 'number'
+              ? message.branching.minOptionCount
+              : 2;
+
+            if (selectedOptionIds.length < minimum) {
+              if (errorEl) errorEl.textContent = `Select at least ${minimum} options before exploring them as branches.`;
+              return;
+            }
+
+            if (errorEl) errorEl.textContent = '';
+            onAnswer({
+              type: 'branch_materialize',
+              questionId: message.questionId,
+              optionIds: selectedOptionIds,
+              text: text || null,
+              rawInput: text || selectedOptionIds.join(', ')
+            });
+          });
+        }
         return;
       }
 

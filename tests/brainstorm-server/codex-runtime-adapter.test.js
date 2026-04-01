@@ -235,7 +235,7 @@ async function runTests() {
     assert.strictEqual(next.decisionTrail.length, 1);
   });
 
-  await test('builds a phase-aware prompt for reframe and divergence work', async () => {
+  await test('builds a skill-first prompt that explicitly invokes $brainstorming', async () => {
     const skillPolicy = adapterModule.loadBrainstormingSkillPolicy();
     assert(skillPolicy.includes('Source skill file: skills/brainstorming/SKILL.md'));
     assert(skillPolicy.includes('ask questions one at a time to refine the idea'));
@@ -254,16 +254,21 @@ async function runTests() {
       history: [
         { questionId: 'topic', question: 'Brainstorming Topic', answer: 'A tool that helps teams shape rough product ideas' }
       ]
-    }, { completionMode: 'summary' });
+    }, {
+      completionMode: 'summary',
+      initialPrompt: 'A tool that helps teams shape rough product ideas'
+    });
 
+    assert(reframePrompt.includes('$brainstorming'));
+    assert(reframePrompt.includes('User request:'));
     assert(reframePrompt.includes('Required skill bootstrap:'));
     assert(reframePrompt.includes('Source skill file: skills/brainstorming/SKILL.md'));
     assert(reframePrompt.includes('Before you produce any user-facing content, actually read these skill files from the repository'));
     assert(reframePrompt.includes('skills/using-superpowers/SKILL.md'));
     assert(reframePrompt.includes('ask questions one at a time to refine the idea'));
-    assert(reframePrompt.includes('Brainstorming phase: reframe'));
-    assert(reframePrompt.includes('Next learning goal: select-the-best-problem-frame'));
     assert(reframePrompt.includes('A tool that helps teams shape rough product ideas'));
+    assert(!reframePrompt.includes('Current facilitation intent:'));
+    assert(!reframePrompt.includes('Brainstorming phase:'));
 
     const divergePrompt = adapterModule.buildBrainstormTurnPrompt({
       strategyState: {
@@ -284,9 +289,8 @@ async function runTests() {
       ]
     }, { completionMode: 'summary' });
 
-    assert(divergePrompt.includes('Propose 2-3 different approaches with trade-offs'));
-    assert(divergePrompt.includes('Brainstorming phase: diverge'));
-    assert(divergePrompt.includes('generate 2-5 distinct directions'));
+    assert(divergePrompt.includes('$brainstorming'));
+    assert(divergePrompt.includes('Browser host contract:'));
     assert(divergePrompt.includes('Help teams turn rough product ideas into sharper decisions'));
   });
 
@@ -335,11 +339,20 @@ async function runTests() {
     assert.strictEqual(summary.answers.length, 1);
   });
 
-  await test('keeps the session in question mode when the finished-deliverable gate is not yet satisfied', async () => {
+  await test('does not let the adapter auto-finish locally when the runtime still wants to ask a follow-up question', async () => {
     const provider = adapterModule.createExecCodexRuntimeProvider({
-      runExec: async () => {
-        throw new Error('runExec should not be called once the local completion gate takes over');
-      }
+      runExec: async () => ({
+        agentText: JSON.stringify({
+          type: 'question',
+          questionType: 'ask_text',
+          questionId: 'follow-up',
+          title: 'What evidence should the final output include before we conclude?',
+          description: '',
+          options: [],
+          allowTextOverride: true,
+          textOverrideLabel: 'Type supporting evidence'
+        })
+      })
     });
 
     const result = await provider.submitAnswer({
@@ -382,8 +395,7 @@ async function runTests() {
     });
 
     assert.strictEqual(result.currentMessage.type, 'question');
-    assert(result.currentMessage.title.includes('finish this brainstorm'));
-    assert.strictEqual(result.strategyState.phase, 'handoff');
+    assert.strictEqual(result.currentMessage.questionId, 'follow-up');
   });
 
   console.log(`\n--- Results: ${passed} passed, ${failed} failed ---`);

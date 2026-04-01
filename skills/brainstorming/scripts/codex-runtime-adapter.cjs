@@ -15,7 +15,7 @@ const DEFAULT_FLOW_ID = 'structured-demo';
 const FLOW_REGISTRY = Object.freeze({
   [DEFAULT_FLOW_ID]: structuredRuntime.STRUCTURED_DEMO_FLOW
 });
-const DEFAULT_PROVIDER_TIMEOUT_MS = 15000;
+const DEFAULT_PROVIDER_TIMEOUT_MS = 45000;
 const DEFAULT_STRATEGY_PHASE = 'scope';
 const DEFAULT_NEXT_LEARNING_GOAL = 'understand-the-core-problem';
 const BRAINSTORMING_SKILL_RELATIVE_PATH = 'skills/brainstorming/SKILL.md';
@@ -39,7 +39,8 @@ const PRODUCT_BASE_INSTRUCTIONS = [
   'Do not expose CLI, protocol, or debugging details to the user.',
   'At the start of the session, load the required repository skill files before replying.',
   'You may inspect repository files when needed to load the required repository skill files.',
-  'Do not inspect unrelated repository files or call tools unless the user explicitly asks for implementation or file analysis.'
+  'You may inspect additional repository context when the loaded brainstorming skill calls for project exploration, but stay narrowly scoped to the current topic.',
+  'Do not replace the live repository skills with a host-invented workflow.'
 ].join(' ');
 const SEEDED_FAKE_REFRAME_OPTIONS = Object.freeze([
   { id: 'clarify-decision', label: 'Clarify the real decision', description: 'Figure out the exact choice or tension the session should resolve first.' },
@@ -233,6 +234,37 @@ function normalizeChoiceList(options, prefix) {
     .filter(Boolean);
 }
 
+function isBareOptionMarker(value) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return /^[A-Z]$/.test(text) || /^\d+$/.test(text);
+}
+
+function formatQuestionOption(option, index) {
+  const source = option && typeof option === 'object' ? option : {};
+  const fallbackId = `option-${index + 1}`;
+  const rawLabel = typeof option === 'string'
+    ? option
+    : (source.label || source.title || source.value || source.id || fallbackId);
+  const label = typeof rawLabel === 'string' ? rawLabel.trim() : String(rawLabel || '').trim();
+  const description = typeof source.description === 'string'
+    ? source.description.trim()
+    : (typeof source.details === 'string' ? source.details.trim() : '');
+
+  if (isBareOptionMarker(label) && description) {
+    return {
+      id: source.id || source.value || fallbackId,
+      label: `${label}. ${description}`,
+      description: ''
+    };
+  }
+
+  return {
+    id: source.id || source.value || fallbackId,
+    label: label || fallbackId,
+    description
+  };
+}
+
 function normalizeDecisionTrailEntry(entry, index) {
   if (!entry) {
     return null;
@@ -264,8 +296,84 @@ function normalizeDecisionTrailEntry(entry, index) {
   };
 }
 
+function normalizeBranchRun(branchRun, index) {
+  if (!branchRun || typeof branchRun !== 'object') {
+    return null;
+  }
+
+  const id = typeof branchRun.id === 'string' && branchRun.id.trim()
+    ? branchRun.id.trim()
+    : `branch-run-${index + 1}`;
+  const sourceOptionId = typeof branchRun.sourceOptionId === 'string' && branchRun.sourceOptionId.trim()
+    ? branchRun.sourceOptionId.trim()
+    : null;
+  const title = typeof branchRun.title === 'string' && branchRun.title.trim()
+    ? branchRun.title.trim()
+    : (typeof branchRun.label === 'string' && branchRun.label.trim()
+      ? branchRun.label.trim()
+      : sourceOptionId);
+
+  if (!title) {
+    return null;
+  }
+
+  const history = Array.isArray(branchRun.history)
+    ? branchRun.history
+      .filter((entry) => entry && typeof entry === 'object')
+      .map((entry) => ({
+        questionId: typeof entry.questionId === 'string' ? entry.questionId : null,
+        question: typeof entry.question === 'string' ? entry.question : '',
+        answer: typeof entry.answer === 'string' ? entry.answer : ''
+      }))
+    : [];
+  const currentMessage = branchRun.currentMessage && typeof branchRun.currentMessage === 'object'
+    ? clone(branchRun.currentMessage)
+    : null;
+  const resultSummary = branchRun.resultSummary && typeof branchRun.resultSummary === 'object'
+    ? {
+        title: typeof branchRun.resultSummary.title === 'string' ? branchRun.resultSummary.title : title,
+        text: typeof branchRun.resultSummary.text === 'string' ? branchRun.resultSummary.text : ''
+      }
+    : null;
+
+  return {
+    id,
+    parentQuestionId: typeof branchRun.parentQuestionId === 'string' && branchRun.parentQuestionId.trim()
+      ? branchRun.parentQuestionId.trim()
+      : null,
+    sourceOptionId,
+    title,
+    description: typeof branchRun.description === 'string' ? branchRun.description : '',
+    status: typeof branchRun.status === 'string' && branchRun.status.trim()
+      ? branchRun.status.trim()
+      : (resultSummary ? 'complete' : 'paused'),
+    currentQuestionId: typeof branchRun.currentQuestionId === 'string' && branchRun.currentQuestionId.trim()
+      ? branchRun.currentQuestionId.trim()
+      : (currentMessage && currentMessage.type === 'question' ? currentMessage.questionId : null),
+    currentMessage,
+    history,
+    resultSummary,
+    createdAt: typeof branchRun.createdAt === 'string' ? branchRun.createdAt : null,
+    updatedAt: typeof branchRun.updatedAt === 'string' ? branchRun.updatedAt : null
+  };
+}
+
+function normalizeBranchRunList(branchRuns) {
+  if (!Array.isArray(branchRuns)) {
+    return [];
+  }
+
+  return branchRuns
+    .map((branchRun, index) => normalizeBranchRun(branchRun, index))
+    .filter(Boolean);
+}
+
 function normalizeStrategyState(strategyState) {
   const source = strategyState && typeof strategyState === 'object' ? strategyState : {};
+  const branchRuns = normalizeBranchRunList(source.branchRuns);
+  const selectedBranchRunId = typeof source.selectedBranchRunId === 'string' && source.selectedBranchRunId.trim()
+    ? source.selectedBranchRunId.trim()
+    : null;
   return {
     phase: typeof source.phase === 'string' && source.phase.trim()
       ? source.phase
@@ -279,6 +387,10 @@ function normalizeStrategyState(strategyState) {
     selectionCriteria: normalizeChoiceList(source.selectionCriteria, 'criterion'),
     selectedCriterion: normalizeChoice(source.selectedCriterion, 'selected-criterion', 0),
     selectedPath: normalizeChoice(source.selectedPath, 'selected-path', 0),
+    branchRuns,
+    selectedBranchRunId: branchRuns.some((branchRun) => branchRun.id === selectedBranchRunId)
+      ? selectedBranchRunId
+      : null,
     decisionTrail: Array.isArray(source.decisionTrail)
       ? source.decisionTrail.map((entry, index) => normalizeDecisionTrailEntry(entry, index)).filter(Boolean)
       : []
@@ -316,6 +428,8 @@ function initializeStrategyStateForSession(input) {
     selectionCriteria: [],
     selectedCriterion: null,
     selectedPath: null,
+    branchRuns: [],
+    selectedBranchRunId: null,
     decisionTrail: appendDecisionTrail([], 'topic', seedPrompt)
   };
 }
@@ -390,15 +504,7 @@ function normalizeStructuredMessage(payload) {
 
   if (payload.type === 'question') {
     const normalizedOptions = Array.isArray(payload.options)
-      ? payload.options.map((option, index) => {
-          const source = option && typeof option === 'object' ? option : {};
-          const fallbackId = `option-${index + 1}`;
-          return {
-            id: source.id || source.value || fallbackId,
-            label: source.label || source.title || source.value || source.id || fallbackId,
-            description: source.description || source.details || ''
-          };
-        })
+      ? payload.options.map((option, index) => formatQuestionOption(option, index))
       : [];
     return {
       type: 'question',
@@ -414,6 +520,9 @@ function normalizeStructuredMessage(payload) {
       textOverrideLabel: payload.textOverrideLabel || 'Type your answer',
       provenance: payload.provenance && typeof payload.provenance === 'object'
         ? clone(payload.provenance)
+        : undefined,
+      branching: payload.branching && typeof payload.branching === 'object'
+        ? clone(payload.branching)
         : undefined,
       metadata: payload.metadata && typeof payload.metadata === 'object'
         ? clone(payload.metadata)
@@ -976,6 +1085,16 @@ function annotateQuestionMessage(strategyState, message, provenanceContext) {
       learningGoal: normalizeStrategyState(strategyState).nextLearningGoal
     }
   };
+  if (
+    move.intent === 'generate_directions'
+    && annotated.questionType === structuredHost.QUESTION_TYPES.PICK_MANY
+  ) {
+    annotated.branching = {
+      branchable: true,
+      materializeActionLabel: 'Explore selected as branches',
+      minOptionCount: 2
+    };
+  }
   return attachMessageProvenance(annotated, provenanceContext);
 }
 
@@ -1174,16 +1293,9 @@ function buildExecPrompt(snapshot, options) {
   const transcript = snapshot && snapshot.providerSession && Array.isArray(snapshot.providerSession.transcript)
     ? snapshot.providerSession.transcript
     : [];
-  const currentQuestion = snapshot && snapshot.currentMessage && snapshot.currentMessage.type === 'question'
-    ? snapshot.currentMessage
-    : null;
 
   return [
     buildBrainstormTurnPrompt(snapshot, options),
-    '',
-    currentQuestion
-      ? `Current unanswered question: ${currentQuestion.questionId} | ${currentQuestion.title}`
-      : 'There is no unanswered question yet.',
     '',
     'Previous transcript turns:',
     transcript.length > 0
@@ -1191,8 +1303,8 @@ function buildExecPrompt(snapshot, options) {
       : '- (none yet)',
     '',
     history.length > 0
-      ? 'Build on the existing decision trail instead of restarting intake.'
-      : 'Start with the highest-leverage scoping question.'
+      ? 'Continue the same brainstorming session from the existing thread and answer history.'
+      : 'This is the start of a new brainstorming session.'
   ].join('\n');
 }
 
@@ -1207,66 +1319,55 @@ function buildAppServerInitialPrompt(options) {
 function buildBrainstormTurnPrompt(snapshot, options) {
   const history = snapshot && Array.isArray(snapshot.history) ? snapshot.history : [];
   const strategyState = normalizeStrategyState(snapshot && snapshot.strategyState);
-  const move = getBrainstormMove(strategyState);
   const skillPolicy = loadBrainstormingSkillPolicy();
   const requiredSkillLoadingInstructions = buildRequiredSkillLoadingInstructions();
+  const explicitSeed = normalizeSeedPrompt(
+    options && typeof options.initialPrompt === 'string'
+      ? options.initialPrompt
+      : (snapshot && typeof snapshot.seedPrompt === 'string' ? snapshot.seedPrompt : null)
+  );
+  const topicAnchor = explicitSeed
+    || findLatestDecisionTrailValue(strategyState.decisionTrail, 'topic')
+    || (strategyState.problemFrame && strategyState.problemFrame.summary ? strategyState.problemFrame.summary : null);
+  const latestAnswer = history.length > 0 ? history[history.length - 1] : null;
 
   return [
-    'You are facilitating a real brainstorming session for a browser-first product.',
-    'Return exactly one JSON object and nothing else.',
-    'Valid message types are: question, summary, artifact_ready.',
-    'Valid questionType values are: pick_one, pick_many, confirm, ask_text.',
-    'Ask exactly one formal question at a time.',
-    'Do not fall back to generic intake fields when a sharper reframing, divergence, or convergence move is available.',
+    '$brainstorming',
+    '',
+    topicAnchor
+      ? `User request:\n${topicAnchor}`
+      : 'User request:\nStart a new brainstorming session and ask the first formal question.',
     '',
     'Required skill bootstrap:',
     requiredSkillLoadingInstructions,
     '',
-    'Embedded fallback excerpt from the current brainstorming skill (use this only if the runtime cannot read the skill files above):',
-    skillPolicy,
-    '',
+    'Browser host contract:',
+    'Return exactly one JSON object and nothing else.',
+    'Allowed message types are: question, summary, artifact_ready.',
+    'Allowed questionType values are: pick_one, pick_many, confirm, ask_text.',
+    'Ask exactly one formal question at a time while the brainstorm is still active.',
+    'For question options, each option label must contain the full user-facing choice text. Never return placeholder labels like A, B, C, 1, 2, 3 by themselves.',
+    'If you want lettered choices, include the full text in the label itself, for example: "A. Public policy research article".',
     options && options.completionMode === 'artifact'
-      ? 'When the brainstorming result is ready for handoff, you may return artifact_ready with artifactMarkdown.'
-      : 'When the brainstorming result is ready, return summary.',
-    '',
-    `Brainstorming phase: ${strategyState.phase}`,
-    `Next learning goal: ${strategyState.nextLearningGoal}`,
-    `Current facilitation intent: ${move.intent}`,
-    move.questionType ? `Recommended questionType: ${move.questionType}` : 'Recommended questionType: none',
-    '',
-    strategyState.problemFrame && strategyState.problemFrame.summary
-      ? `Current problem frame: ${strategyState.problemFrame.summary}`
-      : 'Current problem frame: (not set yet)',
-    'Candidate directions:',
-    formatChoiceLines(strategyState.candidateDirections, 'none yet'),
-    '',
-    'Shortlisted directions:',
-    formatChoiceLines(strategyState.shortlistedDirections, 'none yet'),
-    '',
-    'Selection criteria:',
-    formatChoiceLines(strategyState.selectionCriteria, 'none yet'),
-    '',
-    strategyState.selectedCriterion
-      ? `Selected criterion: ${formatChoice(strategyState.selectedCriterion)}`
-      : 'Selected criterion: (none yet)',
-    strategyState.selectedPath
-      ? `Selected path: ${formatChoice(strategyState.selectedPath)}`
-      : 'Selected path: (none yet)',
-    '',
-    'Decision trail:',
-    formatDecisionTrail(strategyState.decisionTrail),
+      ? 'When the brainstorming session reaches a real deliverable, return artifact_ready only after the full user-facing deliverable body is actually written.'
+      : 'When the brainstorming session reaches a real deliverable, return summary and keep the content faithful to that real deliverable.',
+    options && options.completionMode === 'artifact'
+      ? 'For artifact_ready, you MUST include artifactMarkdown containing the complete deliverable body. Do not return artifact_ready with only a title or a status sentence.'
+      : 'For summary, do not collapse the result into a placeholder status sentence.',
+    'Do not replace the real skill outcome with a generic host-invented recommendation template.',
+    'Do not write files, commit code, or begin implementation tasks during this browser-host brainstorming session unless the user explicitly changes modes.',
     '',
     'Conversation history:',
     history.length > 0
-      ? history.map((entry) => `- ${entry.questionId}: ${entry.answer}`).join('\n')
+      ? history.map((entry) => `- ${entry.question}: ${entry.answer}`).join('\n')
       : '- (none yet)',
     '',
-    'Phase-specific guidance:',
-    move.guidance,
+    latestAnswer
+      ? `Latest user answer:\n${latestAnswer.answer}`
+      : 'Latest user answer:\n(none yet)',
     '',
-    strategyState.phase === 'handoff'
-      ? 'Finish with a structured handoff that names the problem framing, explored directions, recommended path, why it won, and what to validate next.'
-      : 'Produce the single next highest-information-gain move.'
+    'Embedded fallback excerpt from the current brainstorming skill (use this only if the runtime cannot read the skill files above):',
+    skillPolicy
   ].join('\n');
 }
 
@@ -1274,18 +1375,22 @@ function buildAppServerDeveloperInstructions(options) {
   const skillPolicy = loadBrainstormingSkillPolicy();
   const requiredSkillLoadingInstructions = buildRequiredSkillLoadingInstructions();
   return [
+    'Serve as a thin browser host for a real Codex skill session.',
+    'The user turn will explicitly invoke $brainstorming; follow the live repository skill rather than a host-invented workflow.',
     'Return the next user-facing message quickly and keep it product-friendly.',
     'Use one of these message types only: question, summary, artifact_ready.',
     'Supported questionType values are: pick_one, pick_many, confirm, ask_text.',
-    'Drive the conversation with the actually loaded repository skills rather than generic intake fields.',
+    'For options, never use bare labels like A, B, C, 1, 2, 3 as the entire user-facing label.',
     requiredSkillLoadingInstructions,
     `Required skill files: ${REQUIRED_SKILL_FILES.join(', ')}.`,
     'Do not claim a skill is loaded unless you actually read the file in this runtime.',
     `Embedded fallback skill excerpt source: ${BRAINSTORMING_SKILL_RELATIVE_PATH}.`,
     skillPolicy,
     options && options.completionMode === 'artifact'
-      ? 'When the conversation is ready for handoff, return artifact_ready with concise markdown-ready content that includes the recommendation, alternatives, and rationale.'
-      : 'When enough information has been gathered, return summary instead of continuing to ask questions. That summary must synthesize the problem framing, explored options, recommendation, and rationale.',
+      ? 'When the skill reaches a real deliverable, return artifact_ready that reflects that real deliverable and includes artifactMarkdown with the full deliverable body.'
+      : 'When the skill reaches a real deliverable, return summary that reflects that real deliverable.',
+    'Never emit artifact_ready as a placeholder acknowledgement.',
+    'Do not replace the real skill outcome with a generic recommendation wrapper.',
     'Do not produce multiple unanswered questions in a single turn.'
   ].join(' ');
 }
@@ -1365,11 +1470,7 @@ function mapRequestUserInputToQuestion(params) {
     questionId: sourceQuestion.id || 'question',
     title: sourceQuestion.question || sourceQuestion.header || 'Untitled question',
     description: sourceQuestion.header || '',
-    options: sourceOptions.map((option, index) => ({
-      id: `option-${index + 1}`,
-      label: option.label,
-      description: option.description || ''
-    })),
+    options: sourceOptions.map((option, index) => formatQuestionOption(option, index)),
     allowTextOverride: sourceQuestion.isOther === true,
     textOverrideLabel: 'Type your own answer',
     metadata: {
@@ -1394,11 +1495,7 @@ function mapToolCallToQuestion(params) {
     questionId: params && params.callId ? params.callId : 'tool-call',
     title: args.question || args.title || 'Untitled question',
     description: args.description || args.context || '',
-    options: options.map((option, index) => ({
-      id: `option-${index + 1}`,
-      label: typeof option === 'string' ? option : option.label,
-      description: typeof option === 'string' ? '' : (option.description || '')
-    })),
+    options: options.map((option, index) => formatQuestionOption(option, index)),
     allowTextOverride: args.allowOther === true,
     textOverrideLabel: 'Type your own answer',
     metadata: {
@@ -1455,7 +1552,7 @@ function buildUserInputResponse(questionMessage, answer) {
   };
 }
 
-function waitForAppServerMessage(client, context) {
+function waitForAppServerMessage(client, context, timeoutMs) {
   const threadId = context.threadId;
   const history = Array.isArray(context.history) ? context.history : [];
   let agentText = '';
@@ -1541,7 +1638,7 @@ function waitForAppServerMessage(client, context) {
 
     client.on('server-request', onServerRequest);
     client.on('notification', onNotification);
-  }), DEFAULT_PROVIDER_TIMEOUT_MS, 'waitForAppServerMessage');
+  }), timeoutMs || DEFAULT_PROVIDER_TIMEOUT_MS, 'waitForAppServerMessage');
 }
 
 function createFakeSessionState(flowId, sessionId, input) {
@@ -1688,7 +1785,10 @@ function createExecCodexRuntimeProvider(options) {
         providerSession: { transcript: [] },
         currentMessage: null,
         strategyState
-      }, { completionMode });
+      }, {
+        completionMode,
+        initialPrompt: input && input.initialPrompt ? input.initialPrompt : null
+      });
       const result = await runExec(prompt, input || {});
       const message = decorateRuntimeMessage(
         strategyState,
@@ -1739,30 +1839,13 @@ function createExecCodexRuntimeProvider(options) {
       const nextHistory = (snapshot.history || []).concat(createHistoryEntry(snapshot.currentMessage, answer));
       const providerSession = snapshot.providerSession || { transcript: [], completionMode: 'artifact' };
       const nextStrategyState = advanceStrategyStateFromAnswer(snapshot.strategyState, snapshot.currentMessage, answer);
-      if (nextStrategyState.phase === 'handoff') {
-        const completion = createBrainstormCompletionMessage(nextStrategyState, nextHistory, {
-          backendMode: BACKEND_MODES.EXEC,
-          generationMode: GENERATION_MODES.REAL_SKILL_RUNTIME,
-          providerSession
-        });
-        return {
-          sessionId: snapshot.sessionId || null,
-          backendMode: BACKEND_MODES.EXEC,
-          providerSession: {
-            ...providerSession
-          },
-          strategyState: completion.strategyState,
-          currentQuestionId: completion.message.type === 'question' ? completion.message.questionId : null,
-          history: nextHistory,
-          currentMessage: completion.message
-        };
-      }
-
       const prompt = buildExecPrompt({
         ...snapshot,
         history: nextHistory,
         strategyState: nextStrategyState
-      }, { completionMode: providerSession.completionMode || 'artifact' });
+      }, {
+        completionMode: providerSession.completionMode || 'artifact'
+      });
       const result = await runExec(prompt, {
         ...snapshot,
         history: nextHistory,
@@ -1803,26 +1886,34 @@ function createAppServerCodexRuntimeProvider(options) {
     ? options.clientFactory
     : (() => createCodexAppServerClient(options && options.clientOptions ? options.clientOptions : {}));
   const clients = new Map();
+  const waitForMessageTimeoutMs = options && typeof options.waitForMessageTimeoutMs === 'number'
+    ? options.waitForMessageTimeoutMs
+    : DEFAULT_PROVIDER_TIMEOUT_MS;
 
   async function getClient(snapshot) {
     if (snapshot && snapshot.sessionId && clients.has(snapshot.sessionId)) {
-      return clients.get(snapshot.sessionId);
+      return {
+        client: clients.get(snapshot.sessionId),
+        reusedExistingClient: true
+      };
     }
 
     const client = clientFactory(snapshot || {});
     if (snapshot && snapshot.sessionId) {
       clients.set(snapshot.sessionId, client);
     }
-    if (snapshot && snapshot.providerSession && snapshot.providerSession.threadId) {
-      await client.resumeThread({
-        threadId: snapshot.providerSession.threadId,
-        baseInstructions: PRODUCT_BASE_INSTRUCTIONS,
-        developerInstructions: buildAppServerDeveloperInstructions({
-          completionMode: snapshot.providerSession.completionMode || 'artifact'
-        })
-      });
-    }
-    return client;
+    return {
+      client,
+      reusedExistingClient: false
+    };
+  }
+
+  async function startFreshThread(client, completionMode, cwd) {
+    return client.startThread({
+      cwd: cwd || process.cwd(),
+      baseInstructions: PRODUCT_BASE_INSTRUCTIONS,
+      developerInstructions: buildAppServerDeveloperInstructions({ completionMode })
+    });
   }
 
   return {
@@ -1835,11 +1926,11 @@ function createAppServerCodexRuntimeProvider(options) {
         clients.set(sessionId, client);
       }
 
-      const thread = await client.startThread({
-        cwd: input && input.cwd ? input.cwd : process.cwd(),
-        baseInstructions: PRODUCT_BASE_INSTRUCTIONS,
-        developerInstructions: buildAppServerDeveloperInstructions({ completionMode })
-      });
+      const thread = await startFreshThread(
+        client,
+        completionMode,
+        input && input.cwd ? input.cwd : process.cwd()
+      );
       const nextPromise = waitForAppServerMessage(client, {
         threadId: thread.threadId,
         history: [],
@@ -1849,21 +1940,24 @@ function createAppServerCodexRuntimeProvider(options) {
           threadId: thread.threadId,
           completionMode
         }
-      });
-      const turn = await client.startTurn({
-        threadId: thread.threadId,
-        input: [
-          {
-            type: 'text',
-            text: buildAppServerInitialPrompt({
-              completionMode,
-              strategyState,
-              history: []
-            })
-          }
-        ]
-      });
-      const next = await nextPromise;
+      }, waitForMessageTimeoutMs);
+      const [turn, next] = await Promise.all([
+        client.startTurn({
+          threadId: thread.threadId,
+          input: [
+            {
+              type: 'text',
+              text: buildAppServerInitialPrompt({
+                completionMode,
+                strategyState,
+                history: [],
+                initialPrompt: input && input.initialPrompt ? input.initialPrompt : null
+              })
+            }
+          ]
+        }),
+        nextPromise
+      ]);
       const message = decorateRuntimeMessage(strategyState, next.currentMessage, {
         backendMode: BACKEND_MODES.APP_SERVER,
         generationMode: GENERATION_MODES.REAL_SKILL_RUNTIME,
@@ -1909,61 +2003,79 @@ function createAppServerCodexRuntimeProvider(options) {
         throw new Error('Cannot submit answer to non-app-server session snapshot');
       }
 
-      const client = await getClient(snapshot);
+      let client;
+      let reusedExistingClient = false;
       const nextHistory = (snapshot.history || []).concat(createHistoryEntry(snapshot.currentMessage, answer));
       const providerSession = snapshot.providerSession || {};
       const nextStrategyState = advanceStrategyStateFromAnswer(snapshot.strategyState, snapshot.currentMessage, answer);
-      if (nextStrategyState.phase === 'handoff') {
-        const completion = createBrainstormCompletionMessage(nextStrategyState, nextHistory, {
-          backendMode: BACKEND_MODES.APP_SERVER,
-          generationMode: GENERATION_MODES.REAL_SKILL_RUNTIME,
-          providerSession
-        });
-        return {
-          sessionId: snapshot.sessionId || null,
-          backendMode: BACKEND_MODES.APP_SERVER,
-          providerSession: {
-            ...providerSession,
-            pendingRequestId: null,
-            pendingRequestMethod: null,
-            pendingRequestParams: null
-          },
-          strategyState: completion.strategyState,
-          currentQuestionId: completion.message.type === 'question' ? completion.message.questionId : null,
-          history: nextHistory,
-          currentMessage: completion.message
-        };
+      let threadId = providerSession.threadId || null;
+      let pendingRequestId = providerSession.pendingRequestId || null;
+      let pendingRequestMethod = providerSession.pendingRequestMethod || null;
+      let pendingRequestParams = providerSession.pendingRequestParams || null;
+      let recoveredMissingThread = false;
+
+      {
+        const acquired = await getClient(snapshot);
+        client = acquired.client;
+        reusedExistingClient = acquired.reusedExistingClient;
+      }
+
+      if (!reusedExistingClient) {
+        const freshThread = await startFreshThread(
+          client,
+          providerSession.completionMode || 'artifact',
+          process.cwd()
+        );
+        threadId = freshThread.threadId;
+        pendingRequestId = null;
+        pendingRequestMethod = null;
+        pendingRequestParams = null;
+        recoveredMissingThread = true;
       }
 
       const nextPromise = waitForAppServerMessage(client, {
-        threadId: providerSession.threadId,
+        threadId,
         history: nextHistory,
         strategyState: nextStrategyState,
         backendMode: BACKEND_MODES.APP_SERVER,
-        providerSession
-      });
+        providerSession: {
+          ...providerSession,
+          threadId,
+          pendingRequestId,
+          pendingRequestMethod,
+          pendingRequestParams
+        }
+      }, waitForMessageTimeoutMs);
 
-      if (providerSession.pendingRequestId) {
-        await client.sendServerResponse({
-          requestId: providerSession.pendingRequestId,
-          result: buildUserInputResponse(snapshot.currentMessage, answer)
-        });
+      if (pendingRequestId && !recoveredMissingThread) {
+        await Promise.all([
+          client.sendServerResponse({
+            requestId: pendingRequestId,
+            result: buildUserInputResponse(snapshot.currentMessage, answer)
+          }),
+          nextPromise
+        ]);
       } else {
-        const turn = await client.startTurn({
-          threadId: providerSession.threadId,
-          input: [
-            {
-              type: 'text',
-              text: buildBrainstormTurnPrompt({
-                history: nextHistory,
-                strategyState: nextStrategyState,
-                currentMessage: null
-              }, {
-                completionMode: providerSession.completionMode || 'artifact'
-              })
-            }
-          ]
-        });
+        const [turn] = await Promise.all([
+          client.startTurn({
+            threadId,
+            input: [
+              {
+                type: 'text',
+                text: buildBrainstormTurnPrompt({
+                  history: nextHistory,
+                  strategyState: nextStrategyState,
+                  currentMessage: null,
+                  seedPrompt: snapshot.seedPrompt || null
+                }, {
+                  completionMode: providerSession.completionMode || 'artifact',
+                  initialPrompt: snapshot.seedPrompt || null
+                })
+              }
+            ]
+          }),
+          nextPromise
+        ]);
         providerSession.turnId = turn.turnId;
       }
 
@@ -1984,6 +2096,7 @@ function createAppServerCodexRuntimeProvider(options) {
         backendMode: BACKEND_MODES.APP_SERVER,
         providerSession: {
           ...providerSession,
+          threadId,
           turnId: next.turnId || providerSession.turnId || null,
           pendingRequestId: next.pendingRequestId,
           pendingRequestMethod: next.pendingRequestMethod,

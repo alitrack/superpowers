@@ -1,9 +1,5 @@
-# brainstorm-web-session-management Specification
+## MODIFIED Requirements
 
-## Purpose
-Define how browser-first brainstorming sessions are created, isolated, persisted, and resumed in the Web product.
-
-## Requirements
 ### Requirement: Browser brainstorming sessions are isolated and resumable
 The system MUST create a distinct backend session for each browser brainstorming flow so concurrent users do not share runtime state, and it MUST persist enough session state for a user to resume both completed progress and in-flight background processing without resubmitting answers.
 

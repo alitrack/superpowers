@@ -85,6 +85,18 @@ const MIME_TYPES = {
   '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.svg': 'image/svg+xml'
 };
 
+function readPositiveIntEnv(name) {
+  const raw = process.env[name];
+  if (!raw) {
+    return null;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  return Math.floor(parsed);
+}
+
 // ========== Templates and Constants ==========
 
 const WAITING_PAGE = `<!DOCTYPE html>
@@ -101,6 +113,14 @@ const helperScript = fs.readFileSync(path.join(__dirname, 'helper.js'), 'utf-8')
 const structuredHostScript = fs.readFileSync(path.join(__dirname, 'structured-host.cjs'), 'utf-8');
 const webMainstageScript = fs.readFileSync(path.join(__dirname, 'web-mainstage.cjs'), 'utf-8');
 const webAppShellTemplate = fs.readFileSync(path.join(__dirname, 'web-app-shell.html'), 'utf-8');
+const webGraphClientBundlePath = path.join(__dirname, 'web-graph-client.bundle.js');
+const webGraphClientCssPath = path.join(__dirname, 'web-graph-client.bundle.css');
+const webGraphClientScript = fs.existsSync(webGraphClientBundlePath)
+  ? fs.readFileSync(webGraphClientBundlePath, 'utf-8')
+  : '';
+const webGraphClientCss = fs.existsSync(webGraphClientCssPath)
+  ? fs.readFileSync(webGraphClientCssPath, 'utf-8')
+  : '';
 const { createSessionManager } = require('./web-session-manager.cjs');
 const { createFakeCodexRuntimeAdapter } = require('./codex-runtime-adapter.cjs');
 const { createExecWorkflowEngine } = require('./workflow-artifact-engine.cjs');
@@ -109,9 +129,22 @@ const helperInjection =
   '<script>\n' + structuredHostScript + '\n</script>';
 const runtimeMode = process.env.BRAINSTORM_RUNTIME_MODE || 'real';
 const defaultWorkflowMode = process.env.BRAINSTORM_WORKFLOW_MODE || 'conversation';
+const backgroundProcessing = process.env.BRAINSTORM_BACKGROUND_PROCESSING !== '0';
+const appServerRequestTimeoutMs = readPositiveIntEnv('BRAINSTORM_APP_SERVER_REQUEST_TIMEOUT_MS');
+const runtimeOptions = runtimeMode === 'fake'
+  ? undefined
+  : {
+      appServer: {
+        clientOptions: appServerRequestTimeoutMs
+          ? { requestTimeoutMs: appServerRequestTimeoutMs }
+          : {}
+      }
+    };
 const webSessionManager = createSessionManager({
   dataDir: path.join(SCREEN_DIR, '.web-product'),
   runtimeAdapter: runtimeMode === 'fake' ? createFakeCodexRuntimeAdapter() : undefined,
+  runtimeOptions,
+  backgroundProcessing,
   workflowEngine: runtimeMode === 'fake' ? undefined : createExecWorkflowEngine()
 });
 const legacySocketAdapter = createFakeCodexRuntimeAdapter();
@@ -128,15 +161,32 @@ function wrapInFrame(content) {
 }
 
 function renderWebAppShell() {
-  return webAppShellTemplate
-    .replace(
-      '<!-- BRAINSTORM_MAINSTAGE_SCRIPT -->',
-      '<script>\n' + webMainstageScript + '\n</script>'
-    )
-    .replace(
-      '<!-- STRUCTURED_HOST_SCRIPT -->',
-      '<script>\n' + structuredHostScript + '\n</script>'
-    );
+  const replaceLiteral = (template, marker, content) => (
+    template.replace(marker, () => content)
+  );
+
+  let html = webAppShellTemplate;
+  html = replaceLiteral(
+    html,
+    '<!-- BRAINSTORM_GRAPH_CLIENT_CSS -->',
+    webGraphClientCss ? `<style>\n${webGraphClientCss}\n</style>` : ''
+  );
+  html = replaceLiteral(
+    html,
+    '<!-- BRAINSTORM_MAINSTAGE_SCRIPT -->',
+    '<script>\n' + webMainstageScript + '\n</script>'
+  );
+  html = replaceLiteral(
+    html,
+    '<!-- BRAINSTORM_GRAPH_CLIENT_SCRIPT -->',
+    webGraphClientScript ? '<script>\n' + webGraphClientScript + '\n</script>' : ''
+  );
+  html = replaceLiteral(
+    html,
+    '<!-- STRUCTURED_HOST_SCRIPT -->',
+    '<script>\n' + structuredHostScript + '\n</script>'
+  );
+  return html;
 }
 
 function getNewestScreen() {
@@ -194,6 +244,15 @@ function getActorKind(req) {
 function getErrorStatus(error, fallbackStatus) {
   if (!error || typeof error !== 'object') {
     return fallbackStatus;
+  }
+  if (error.code === 'SESSION_BUSY') {
+    return 409;
+  }
+  if (error.code === 'RUNTIME_TIMEOUT') {
+    return 504;
+  }
+  if (typeof error.message === 'string' && error.message.startsWith('Unknown session:')) {
+    return 404;
   }
   if (error.code === 'FORBIDDEN') {
     return 403;
@@ -663,6 +722,15 @@ function handleApiRequest(req, res, pathname, requestUrl) {
   }
 
   const sessionMatch = pathname.match(/^\/api\/sessions\/([^/]+)$/);
+  if (req.method === 'DELETE' && sessionMatch) {
+    try {
+      sendJson(res, 200, webSessionManager.deleteSession(sessionMatch[1]));
+    } catch (error) {
+      sendJson(res, 404, { error: error.message });
+    }
+    return;
+  }
+
   if (req.method === 'GET' && sessionMatch) {
     try {
       sendJson(res, 200, webSessionManager.getSession(sessionMatch[1]));
@@ -683,7 +751,27 @@ function handleApiRequest(req, res, pathname, requestUrl) {
         const session = await webSessionManager.submitAnswer(answerMatch[1], body);
         sendJson(res, 200, session);
       } catch (submitError) {
-        sendJson(res, 404, { error: submitError.message });
+        sendJson(res, getErrorStatus(submitError, 500), { error: submitError.message });
+      }
+    });
+    return;
+  }
+
+  const contextMatch = pathname.match(/^\/api\/sessions\/([^/]+)\/context$/);
+  if (req.method === 'POST' && contextMatch) {
+    parseJsonBody(req, (error, body) => {
+      if (error) {
+        sendJson(res, 400, { error: 'Invalid JSON body' });
+        return;
+      }
+      try {
+        const branchRunId = typeof body.branchRunId === 'string' && body.branchRunId.trim()
+          ? body.branchRunId.trim()
+          : null;
+        const session = webSessionManager.selectSessionBranchContext(contextMatch[1], branchRunId);
+        sendJson(res, 200, session);
+      } catch (selectionError) {
+        sendJson(res, 404, { error: selectionError.message });
       }
     });
     return;

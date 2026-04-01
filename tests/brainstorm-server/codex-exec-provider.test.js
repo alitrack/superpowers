@@ -54,6 +54,7 @@ async function runTests() {
     assert.strictEqual(session.currentMessage.questionId, 'topic');
     assert.strictEqual(session.history.length, 0);
     assert.strictEqual(prompts.length, 1);
+    assert(prompts[0].includes('$brainstorming'));
     assert(prompts[0].includes('Source skill file: skills/brainstorming/SKILL.md'));
     assert(prompts[0].includes('skills/using-superpowers/SKILL.md'));
     assert(prompts[0].includes('actually read these skill files from the repository'));
@@ -87,6 +88,32 @@ async function runTests() {
     assert.deepStrictEqual(session.currentMessage.options, [
       { id: 'product_idea', label: 'Product idea', description: '' },
       { id: 'feature_plan', label: 'Feature plan', description: '' }
+    ]);
+  });
+
+  await test('expands bare option markers when the runtime provides the full text in description', async () => {
+    const provider = createExecCodexRuntimeProvider({
+      runExec: async () => ({
+        agentText: JSON.stringify({
+          type: 'question',
+          questionType: 'pick_one',
+          questionId: 'article_mode',
+          title: '请选择文章体例',
+          options: [
+            { id: 'option-a', label: 'A', description: '理论评论型文章' },
+            { id: 'option-b', label: 'B', description: '调研报告型文章' },
+            { id: 'option-c', label: 'C', description: '政策建议型文章' }
+          ]
+        })
+      })
+    });
+
+    const session = await provider.createSession({ sessionId: 'exec-compat-2' });
+
+    assert.deepStrictEqual(session.currentMessage.options, [
+      { id: 'option-a', label: 'A. 理论评论型文章', description: '' },
+      { id: 'option-b', label: 'B. 调研报告型文章', description: '' },
+      { id: 'option-c', label: 'C. 政策建议型文章', description: '' }
     ]);
   });
 
@@ -129,11 +156,9 @@ async function runTests() {
     assert.strictEqual(updated.history.length, 1);
     assert.strictEqual(updated.history[0].questionId, 'topic');
     assert.strictEqual(prompts.length, 2);
+    assert(prompts[1].includes('$brainstorming'));
     assert(prompts[1].includes('A browser-first research assistant'));
     assert(updated.strategyState, 'strategyState should be preserved');
-    assert.strictEqual(updated.strategyState.phase, 'reframe');
-    assert.strictEqual(updated.strategyState.nextLearningGoal, 'select-the-best-problem-frame');
-    assert.strictEqual(updated.strategyState.problemFrame.summary, 'A browser-first research assistant');
   });
 
   await test('persists candidate directions, selection criteria, and the final path across a multi-step brainstorm', async () => {
@@ -187,7 +212,28 @@ async function runTests() {
           };
         }
 
-        throw new Error(`Unexpected extra prompt ${prompts.length}`);
+        return {
+          agentText: JSON.stringify({
+            type: 'summary',
+            title: 'Recommendation: Guided question flow',
+            text: [
+              'Recommendation',
+              '- Choose: Guided question flow',
+              '',
+              'Why This Path Currently Wins',
+              '- Fastest path to value',
+              '',
+              'Alternatives Still Worth Remembering',
+              '- Experiment planner'
+            ].join('\n'),
+            path: ['directions', 'criterion', 'path'],
+            answers: [
+              { questionId: 'directions', answer: 'Guided question flow, Experiment planner' },
+              { questionId: 'criterion', answer: 'Fastest path to value' },
+              { questionId: 'path', answer: 'Guided question flow' }
+            ]
+          })
+        };
       }
     });
 
@@ -255,7 +301,6 @@ async function runTests() {
     });
 
     assert.strictEqual(completed.currentMessage.type, 'summary');
-    assert.strictEqual(completed.strategyState.phase, 'handoff');
     assert.strictEqual(completed.strategyState.selectedPath.label, 'Guided question flow');
     assert.strictEqual(completed.currentMessage.title, 'Recommendation: Guided question flow');
     assert(completed.currentMessage.text.includes('Recommendation'));
@@ -264,7 +309,66 @@ async function runTests() {
     assert(completed.currentMessage.text.includes('Guided question flow'));
     assert(completed.currentMessage.text.includes('Experiment planner'));
     assert(completed.currentMessage.text.includes('Fastest path to value'));
-    assert.strictEqual(prompts.length, 3);
+    assert.strictEqual(prompts.length, 4);
+  });
+
+  await test('does not auto-finish locally when the runtime keeps the brainstorm open', async () => {
+    const provider = createExecCodexRuntimeProvider({
+      runExec: async () => ({
+        agentText: JSON.stringify({
+          type: 'question',
+          questionType: 'ask_text',
+          questionId: 'follow-up',
+          title: 'What evidence should this article include before we conclude?',
+          description: '',
+          options: [],
+          allowTextOverride: true,
+          textOverrideLabel: 'Type supporting evidence'
+        })
+      })
+    });
+
+    const result = await provider.submitAnswer({
+      sessionId: 'exec-follow-up-1',
+      backendMode: 'exec',
+      providerSession: {
+        completionMode: 'summary',
+        transcript: []
+      },
+      strategyState: {
+        phase: 'converge',
+        nextLearningGoal: 'commit-to-a-path',
+        problemFrame: null,
+        candidateDirections: [],
+        shortlistedDirections: [],
+        selectionCriteria: [],
+        selectedCriterion: null,
+        selectedPath: null,
+        decisionTrail: []
+      },
+      currentQuestionId: 'path',
+      history: [],
+      currentMessage: {
+        type: 'question',
+        questionType: 'pick_one',
+        questionId: 'path',
+        title: 'Which path should we commit to?',
+        options: [],
+        metadata: {
+          brainstormIntent: 'commit_path'
+        }
+      }
+    }, {
+      type: 'answer',
+      questionId: 'path',
+      answerMode: 'option',
+      optionIds: ['article'],
+      text: null,
+      rawInput: '1'
+    });
+
+    assert.strictEqual(result.currentMessage.type, 'question');
+    assert.strictEqual(result.currentMessage.questionId, 'follow-up');
   });
 
   console.log(`\n--- Results: ${passed} passed, ${failed} failed ---`);

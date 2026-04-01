@@ -43,6 +43,8 @@ async function runTests() {
       assert(args.includes('apply_patch_freeform'));
       assert(args.includes('child_agents_md'));
       assert(args.includes('memories'));
+      assert(args.includes('app-server'));
+      assert(!args.includes('--session-source'));
       assert(args.includes('-c'));
       assert(args.includes('model="gpt-5.3-codex"'));
       assert(!args.includes('model_provider="openai"'));
