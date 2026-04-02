@@ -1689,6 +1689,7 @@
         ensureGraphClient(view);
         renderInspector(view);
         renderSupportingPackage(view);
+        renderRequestStatus();
         applyInteractiveState();
         await refreshSessionList();
         scheduleProcessingPoll(session);

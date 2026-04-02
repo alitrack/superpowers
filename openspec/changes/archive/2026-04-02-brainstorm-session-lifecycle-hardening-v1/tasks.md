@@ -20,4 +20,4 @@
 
 - [x] 4.1 Add regression coverage for stale session detection, retryable transitions, cancelled jobs, and ignored late writes
 - [x] 4.2 Add browser product tests for reopened retryable sessions and lifecycle actions from the UI
-- [ ] 4.3 Run targeted brainstorm-server tests and manually verify stale/retry/cancel session flows in the local browser app
+- [x] 4.3 Run targeted brainstorm-server tests and manually verify stale/retry/cancel session flows in the local browser app

@@ -1609,9 +1609,7 @@ async function runTests() {
   await test('full-skill workflow fails explicitly when real runtime creation times out in product mode', async (tmpDir) => {
     const runtimeAdapter = {
       async createSession() {
-        return new Promise(() => {
-          setTimeout(() => {}, 60000);
-        });
+        return new Promise(() => {});
       }
     };
 
@@ -1634,9 +1632,7 @@ async function runTests() {
   await test('compatibility mode can still continue from a fallback-created fake session', async (tmpDir) => {
     const runtimeAdapter = {
       async createSession() {
-        return new Promise(() => {
-          setTimeout(() => {}, 60000);
-        });
+        return new Promise(() => {});
       }
     };
 
@@ -1713,9 +1709,7 @@ async function runTests() {
         };
       },
       async submitAnswer() {
-        return new Promise(() => {
-          setTimeout(() => {}, 60000);
-        });
+        return new Promise(() => {});
       }
     };
 
@@ -1768,9 +1762,7 @@ async function runTests() {
         };
       },
       async submitAnswer() {
-        return new Promise(() => {
-          setTimeout(() => {}, 60000);
-        });
+        return new Promise(() => {});
       }
     };
 
