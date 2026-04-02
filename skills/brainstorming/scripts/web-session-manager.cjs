@@ -28,6 +28,7 @@ const {
 const DEFAULT_FLOW_ID = 'structured-demo';
 const DEFAULT_RUNTIME_CREATE_TIMEOUT_MS = 45000;
 const DEFAULT_RUNTIME_SUBMIT_TIMEOUT_MS = 45000;
+const DEFAULT_PROCESSING_LEASE_TIMEOUT_MS = 180000;
 const WORKFLOW_MODES = Object.freeze({
   CONVERSATION: 'conversation',
   FULL_SKILL: 'full_skill'
@@ -1000,8 +1001,15 @@ function createSessionManager(options) {
   const runtimeSubmitTimeoutMs = typeof options.runtimeSubmitTimeoutMs === 'number'
     ? options.runtimeSubmitTimeoutMs
     : (readPositiveIntEnv('BRAINSTORM_RUNTIME_SUBMIT_TIMEOUT_MS') || DEFAULT_RUNTIME_SUBMIT_TIMEOUT_MS);
+  const processingLeaseTimeoutMs = typeof options.processingLeaseTimeoutMs === 'number'
+    ? options.processingLeaseTimeoutMs
+    : (readPositiveIntEnv('BRAINSTORM_PROCESSING_LEASE_TIMEOUT_MS') || DEFAULT_PROCESSING_LEASE_TIMEOUT_MS);
+  const processingHeartbeatIntervalMs = typeof options.processingHeartbeatIntervalMs === 'number'
+    ? options.processingHeartbeatIntervalMs
+    : Math.max(10, Math.min(5000, Math.floor(processingLeaseTimeoutMs / 3)));
   const allowFakeRuntimeFallback = Boolean(options.allowFakeRuntimeFallback);
   const backgroundProcessing = Boolean(options.backgroundProcessing);
+  const managerLeaseOwnerId = createId();
   const runningJobs = new Map();
 
   ensureDir(sessionsDir);
@@ -1030,13 +1038,16 @@ function createSessionManager(options) {
       state: 'idle',
       action: null,
       jobId: null,
+      leaseOwnerId: null,
       queuedAt: null,
       startedAt: null,
+      heartbeatAt: null,
       updatedAt: null,
       finishedAt: null,
       attemptCount: 0,
       pendingInput: null,
-      error: null
+      error: null,
+      supersededByJobId: null
     };
   }
 
@@ -1052,7 +1063,7 @@ function createSessionManager(options) {
       ? session.processing
       : {};
     const next = createIdleProcessingState();
-    next.state = source.state === 'running' || source.state === 'failed'
+    next.state = source.state === 'running' || source.state === 'retryable' || source.state === 'cancelled'
       ? source.state
       : 'idle';
     next.action = source.action === 'create' || source.action === 'submit'
@@ -1061,8 +1072,12 @@ function createSessionManager(options) {
     next.jobId = typeof source.jobId === 'string' && source.jobId.trim()
       ? source.jobId.trim()
       : null;
+    next.leaseOwnerId = typeof source.leaseOwnerId === 'string' && source.leaseOwnerId.trim()
+      ? source.leaseOwnerId.trim()
+      : null;
     next.queuedAt = typeof source.queuedAt === 'string' ? source.queuedAt : null;
     next.startedAt = typeof source.startedAt === 'string' ? source.startedAt : null;
+    next.heartbeatAt = typeof source.heartbeatAt === 'string' ? source.heartbeatAt : null;
     next.updatedAt = typeof source.updatedAt === 'string' ? source.updatedAt : null;
     next.finishedAt = typeof source.finishedAt === 'string' ? source.finishedAt : null;
     next.attemptCount = typeof source.attemptCount === 'number' && source.attemptCount >= 0
@@ -1075,26 +1090,62 @@ function createSessionManager(options) {
           code: typeof source.error.code === 'string' ? source.error.code : null
         }
       : null;
+    next.supersededByJobId = typeof source.supersededByJobId === 'string' && source.supersededByJobId.trim()
+      ? source.supersededByJobId.trim()
+      : null;
     session.processing = next;
     return next;
   }
 
   function beginSessionProcessing(session, action, pendingInput) {
+    const previous = ensureSessionProcessing(session);
     const jobId = createId();
+    const queuedAt = nowIso();
     session.processing = {
       state: 'running',
       action,
       jobId,
-      queuedAt: nowIso(),
+      leaseOwnerId: managerLeaseOwnerId,
+      queuedAt,
       startedAt: null,
-      updatedAt: nowIso(),
+      heartbeatAt: queuedAt,
+      updatedAt: queuedAt,
       finishedAt: null,
-      attemptCount: 0,
+      attemptCount: previous.action === action ? previous.attemptCount : 0,
       pendingInput: clonePendingInput(pendingInput),
-      error: null
+      error: null,
+      supersededByJobId: null
     };
-    session.updatedAt = nowIso();
+    session.updatedAt = queuedAt;
     return session.processing;
+  }
+
+  function createProcessingError(error, fallbackMessage, fallbackCode) {
+    return {
+      message: error && error.message ? error.message : fallbackMessage,
+      code: error && error.code ? error.code : (fallbackCode || null)
+    };
+  }
+
+  function isCurrentProcessingJob(session, action, expectedJobId) {
+    const processing = ensureSessionProcessing(session);
+    return Boolean(
+      processing.state === 'running'
+      && processing.action === action
+      && processing.jobId === expectedJobId
+    );
+  }
+
+  function loadSessionIfJobCurrent(sessionId, action, expectedJobId) {
+    try {
+      const session = loadSession(sessionId);
+      return isCurrentProcessingJob(session, action, expectedJobId) ? session : null;
+    } catch (error) {
+      if (/Unknown session/.test(error.message || '')) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   function markSessionProcessingStarted(session, expectedJobId) {
@@ -1103,6 +1154,8 @@ function createSessionManager(options) {
       return false;
     }
     processing.startedAt = processing.startedAt || nowIso();
+    processing.leaseOwnerId = managerLeaseOwnerId;
+    processing.heartbeatAt = nowIso();
     processing.updatedAt = nowIso();
     processing.attemptCount += 1;
     session.updatedAt = nowIso();
@@ -1119,20 +1172,116 @@ function createSessionManager(options) {
     return true;
   }
 
-  function failSessionProcessing(session, expectedJobId, error) {
+  function markSessionProcessingRetryable(session, expectedJobId, error) {
     const processing = ensureSessionProcessing(session);
     if (expectedJobId && processing.jobId && processing.jobId !== expectedJobId) {
       return false;
     }
-    processing.state = 'failed';
-    processing.finishedAt = nowIso();
-    processing.updatedAt = nowIso();
-    processing.error = {
-      message: error && error.message ? error.message : 'Background processing failed',
-      code: error && error.code ? error.code : null
-    };
-    session.updatedAt = nowIso();
+    const finishedAt = nowIso();
+    processing.state = 'retryable';
+    processing.leaseOwnerId = null;
+    processing.heartbeatAt = finishedAt;
+    processing.finishedAt = finishedAt;
+    processing.updatedAt = finishedAt;
+    processing.error = createProcessingError(error, 'Background processing failed', 'BACKGROUND_PROCESSING_FAILED');
+    session.updatedAt = finishedAt;
     return true;
+  }
+
+  function markSessionProcessingCancelled(session, expectedJobId) {
+    const processing = ensureSessionProcessing(session);
+    if (expectedJobId && processing.jobId && processing.jobId !== expectedJobId) {
+      return false;
+    }
+    const cancelledAt = nowIso();
+    processing.state = 'cancelled';
+    processing.leaseOwnerId = null;
+    processing.heartbeatAt = cancelledAt;
+    processing.finishedAt = cancelledAt;
+    processing.updatedAt = cancelledAt;
+    processing.error = null;
+    session.updatedAt = cancelledAt;
+    return true;
+  }
+
+  function isSessionProcessingStale(session) {
+    const processing = ensureSessionProcessing(session);
+    if (
+      processing.state !== 'running'
+      || !processing.action
+      || !processing.jobId
+    ) {
+      return false;
+    }
+    const activeJob = runningJobs.get(session.id);
+    if (activeJob && activeJob.jobId === processing.jobId) {
+      return false;
+    }
+    const heartbeatSource = processing.heartbeatAt || processing.updatedAt || processing.startedAt || processing.queuedAt;
+    const heartbeatAtMs = Date.parse(heartbeatSource || '');
+    if (!Number.isFinite(heartbeatAtMs)) {
+      return true;
+    }
+    return (Date.now() - heartbeatAtMs) > processingLeaseTimeoutMs;
+  }
+
+  function reconcileSessionProcessingLifecycle(session) {
+    if (!backgroundProcessing) {
+      return false;
+    }
+    if (!isSessionProcessingStale(session)) {
+      return false;
+    }
+    return markSessionProcessingRetryable(session, ensureSessionProcessing(session).jobId, {
+      code: 'PROCESSING_STALE',
+      message: 'The background task stopped updating. Retry or cancel this round.'
+    });
+  }
+
+  function persistSessionWithJobGuard(session, expectedJobId, action) {
+    if (!expectedJobId) {
+      persistSession(session);
+      return true;
+    }
+    const current = loadSessionIfJobCurrent(session.id, action, expectedJobId);
+    if (!current) {
+      return false;
+    }
+    session.processing = clone(current.processing);
+    persistSession(session);
+    return true;
+  }
+
+  function touchSessionProcessingHeartbeat(sessionId, action, expectedJobId) {
+    const session = loadSessionIfJobCurrent(sessionId, action, expectedJobId);
+    if (!session) {
+      return false;
+    }
+    const processing = ensureSessionProcessing(session);
+    processing.leaseOwnerId = managerLeaseOwnerId;
+    processing.heartbeatAt = nowIso();
+    processing.updatedAt = nowIso();
+    session.updatedAt = nowIso();
+    persistSession(session);
+    return true;
+  }
+
+  function startProcessingHeartbeat(sessionId, action, expectedJobId) {
+    const timer = setInterval(() => {
+      try {
+        const touched = touchSessionProcessingHeartbeat(sessionId, action, expectedJobId);
+        if (!touched) {
+          clearInterval(timer);
+        }
+      } catch (error) {
+        clearInterval(timer);
+        console.error(error);
+      }
+    }, processingHeartbeatIntervalMs);
+    if (typeof timer.unref === 'function') {
+      timer.unref();
+    }
+    return timer;
   }
 
   function buildCreatePendingInput(input, session) {
@@ -1228,8 +1377,8 @@ function createSessionManager(options) {
     };
   }
 
-  function buildBranchRunId(parentQuestionId, optionId) {
-    return `branch-run-${parentQuestionId || 'decision'}-${optionId || 'option'}`;
+  function buildBranchRunId(parentQuestionNodeId, optionId) {
+    return `branch-run-${parentQuestionNodeId || 'decision'}-${optionId || 'option'}`;
   }
 
   function buildBranchRunQuestion(branchRun) {
@@ -1250,6 +1399,88 @@ function createSessionManager(options) {
       },
       history: Array.isArray(branchRun.history) ? clone(branchRun.history) : []
     };
+  }
+
+  function normalizeDetachedStrategyState(strategyState) {
+    return normalizeStrategyState({
+      ...(strategyState && typeof strategyState === 'object' ? strategyState : {}),
+      branchRuns: [],
+      selectedBranchRunId: null
+    });
+  }
+
+  function cloneHistoryEntries(history) {
+    return Array.isArray(history)
+      ? history
+        .filter((entry) => entry && typeof entry === 'object')
+        .map((entry) => ({
+          questionId: typeof entry.questionId === 'string' ? entry.questionId : null,
+          question: typeof entry.question === 'string' ? entry.question : '',
+          answer: typeof entry.answer === 'string' ? entry.answer : ''
+        }))
+      : [];
+  }
+
+  function createFreshBranchProviderSession(backendMode, completionMode) {
+    const resolvedCompletionMode = completionMode || 'artifact';
+    if (backendMode === 'fake') {
+      return {
+        seeded: true,
+        completionMode: resolvedCompletionMode
+      };
+    }
+    if (backendMode === 'exec') {
+      return {
+        transcript: [],
+        completionMode: resolvedCompletionMode
+      };
+    }
+    if (backendMode === 'app-server') {
+      return {
+        completionMode: resolvedCompletionMode
+      };
+    }
+    return null;
+  }
+
+  function resolveBranchSelectionEntries(question, answer) {
+    const selectedOptions = resolveSelectedOptions(question, answer);
+    if (selectedOptions.length > 0) {
+      return selectedOptions.map((option) => ({
+        id: option && option.id ? option.id : null,
+        label: option && option.label ? option.label : (option && option.id ? option.id : null),
+        description: option && option.description ? option.description : ''
+      }));
+    }
+
+    const label = resolveAnswerLabel(question, answer);
+    if (!label) {
+      return [];
+    }
+    return [{
+      id: slugify(label),
+      label,
+      description: ''
+    }];
+  }
+
+  function isLegacyBranchDetailQuestion(message) {
+    return Boolean(
+      message
+      && message.type === 'question'
+      && message.metadata
+      && message.metadata.brainstormIntent === 'branch_run_detail'
+    );
+  }
+
+  function isRealBranchRun(branchRun) {
+    return Boolean(
+      branchRun
+      && typeof branchRun === 'object'
+      && branchRun.parentQuestionNodeId
+      && branchRun.backendMode
+      && branchRun.providerSession
+    );
   }
 
   function buildRoundId(questionId, seenCounts) {
@@ -1362,6 +1593,14 @@ function createSessionManager(options) {
 
   function findLatestNodeForBranchRun(log, branchRunId) {
     return findLatestNode(log, (node) => (node.branchRunId || null) === branchRunId);
+  }
+
+  function findQuestionNodeByRoundId(log, roundId) {
+    return findLatestNode(log, (node) => (
+      node
+      && node.kind === 'question'
+      && node.roundId === roundId
+    ));
   }
 
   function findIncomingEdge(log, nodeId) {
@@ -1509,7 +1748,7 @@ function createSessionManager(options) {
     const baseNodeId = config.nodeId || buildQuestionNodeId(questionId || 'current');
     const nodeId = buildUniqueNodeId(log, baseNodeId);
     const roundId = branchRunId
-      ? (config.roundId || branchRunId)
+      ? buildUniqueRoundId(log, config.roundId || branchRunId)
       : buildUniqueRoundId(log, config.roundId || buildRoundBaseId(questionId || 'current'));
     const node = {
       id: nodeId,
@@ -1527,6 +1766,8 @@ function createSessionManager(options) {
       sourceAnswer: config.sourceAnswer ? clone(config.sourceAnswer) : null,
       branchRunId,
       sourceOptionId: config.sourceOptionId || null,
+      historySnapshot: cloneHistoryEntries(session.history || []),
+      strategyStateSnapshot: normalizeDetachedStrategyState(session.strategyState),
       createdAt: config.createdAt || nowIso(),
       backendMode: session.backendMode || null,
       messageSnapshot: clone({
@@ -1737,47 +1978,63 @@ function createSessionManager(options) {
 
     const state = normalizeSessionStrategyState(session);
     state.branchRuns.forEach((branchRun) => {
-      const parentQuestionNode = findLatestQuestionNode(log, branchRun.parentQuestionId, { lane: 'mainline' })
+      const parentQuestionNode = (branchRun.parentQuestionNodeId
+        ? findNodeById(log, branchRun.parentQuestionNodeId)
+        : null)
+        || findLatestQuestionNode(log, branchRun.parentQuestionId, { lane: 'mainline' })
         || previousQuestionNode
         || findNodeById(log, log.rootNodeId);
       const branchQuestion = branchRun.currentMessage && branchRun.currentMessage.type === 'question'
         ? branchRun.currentMessage
-        : buildBranchRunQuestion({
-            ...branchRun,
-            currentMessage: null,
-            currentQuestionId: branchRun.currentQuestionId || `${branchRun.id}-detail`
-          });
-      const branchQuestionNode = appendQuestionNodeToLog(log, session, {
-        ...branchQuestion,
-        questionId: branchRun.currentQuestionId || branchQuestion.questionId
-      }, {
-        lane: 'branch',
-        parentNodeId: parentQuestionNode ? parentQuestionNode.id : log.rootNodeId,
-        branchRunId: branchRun.id,
-        roundId: branchRun.id,
-        sourceOptionId: branchRun.sourceOptionId || null,
-        sourceAnswer: createBranchOptionSnapshot({
-          questionId: branchRun.parentQuestionId
-        }, {
-          id: branchRun.sourceOptionId || null,
-          label: branchRun.title || branchRun.sourceOptionId || null
-        }),
-        edgeKind: 'branch'
-      });
-      if (branchRun.resultSummary && branchRun.resultSummary.text) {
-        const answerEntry = Array.isArray(branchRun.history) && branchRun.history.length > 0
-          ? branchRun.history[branchRun.history.length - 1]
-          : { questionId: branchQuestion.questionId, answer: branchRun.resultSummary.text };
-        appendResultNodeToLog(log, session, {
-          type: 'summary',
-          title: branchRun.resultSummary.title || `${branchRun.title || branchRun.id} branch note`,
-          text: branchRun.resultSummary.text
+        : null;
+      let branchQuestionNode = null;
+
+      if (branchQuestion) {
+        branchQuestionNode = appendQuestionNodeToLog(log, session, {
+          ...branchQuestion,
+          questionId: branchRun.currentQuestionId || branchQuestion.questionId
         }, {
           lane: 'branch',
-          parentNodeId: branchQuestionNode.id,
+          parentNodeId: parentQuestionNode ? parentQuestionNode.id : log.rootNodeId,
+          branchRunId: branchRun.id,
+          roundId: branchRun.id,
+          sourceOptionId: branchRun.sourceOptionId || null,
+          sourceAnswer: createBranchOptionSnapshot({
+            questionId: branchRun.parentQuestionId
+          }, {
+            id: branchRun.sourceOptionId || null,
+            label: branchRun.sourceOptionLabel || branchRun.title || branchRun.sourceOptionId || null
+          }),
+          edgeKind: 'branch'
+        });
+      }
+
+      const branchResultMessage = branchRun.currentMessage && branchRun.currentMessage.type === 'artifact_ready'
+        ? branchRun.currentMessage
+        : (
+          branchRun.currentMessage && branchRun.currentMessage.type === 'summary'
+            ? branchRun.currentMessage
+            : (
+              branchRun.resultSummary && branchRun.resultSummary.text
+                ? {
+                    type: 'summary',
+                    title: branchRun.resultSummary.title || `${branchRun.title || branchRun.id} branch note`,
+                    text: branchRun.resultSummary.text
+                  }
+                : null
+            )
+        );
+
+      if (branchResultMessage) {
+        const answerEntry = Array.isArray(branchRun.history) && branchRun.history.length > 0
+          ? branchRun.history[branchRun.history.length - 1]
+          : { questionId: branchRun.parentQuestionId, answer: branchRun.resultSummary ? branchRun.resultSummary.text : '' };
+        appendResultNodeToLog(log, session, branchResultMessage, {
+          lane: 'branch',
+          parentNodeId: branchQuestionNode ? branchQuestionNode.id : (parentQuestionNode ? parentQuestionNode.id : log.rootNodeId),
           branchRunId: branchRun.id,
           sourceAnswer: createHistoryAnswerSnapshot(answerEntry),
-          edgeKind: 'result'
+          edgeKind: branchQuestionNode ? 'result' : 'branch'
         });
       }
     });
@@ -1850,6 +2107,8 @@ function createSessionManager(options) {
       latestMainlineQuestion.optionsSnapshot = clone(getQuestionOptions(session.currentMessage));
       latestMainlineQuestion.metadataSnapshot = session.currentMessage.metadata ? clone(session.currentMessage.metadata) : null;
       latestMainlineQuestion.branchingSnapshot = session.currentMessage.branching ? clone(session.currentMessage.branching) : null;
+      latestMainlineQuestion.historySnapshot = cloneHistoryEntries(session.history || []);
+      latestMainlineQuestion.strategyStateSnapshot = normalizeDetachedStrategyState(session.strategyState);
       latestMainlineQuestion.messageSnapshot = clone({
         type: 'question',
         questionType: session.currentMessage.questionType || null,
@@ -1998,7 +2257,16 @@ function createSessionManager(options) {
           : resolveQuestionAnswerSummary(log, node);
         let status = 'complete';
         if (node.branchRunId) {
-          if (branchRun && branchRun.resultSummary && !branchRun.currentMessage) {
+          if (
+            branchRun
+            && (
+              branchRun.resultSummary
+              || (branchRun.currentMessage && (
+                branchRun.currentMessage.type === 'summary'
+                || branchRun.currentMessage.type === 'artifact_ready'
+              ))
+            )
+          ) {
             status = 'complete';
           } else if (strategyState.selectedBranchRunId === node.branchRunId) {
             status = 'active';
@@ -2012,6 +2280,7 @@ function createSessionManager(options) {
           id: node.roundId,
           kind: 'round',
           lane: node.lane,
+          nodeId: node.id,
           parentRoundId: parentNode && parentNode.kind === 'question'
             ? parentNode.roundId
             : 'topic-root',
@@ -2043,11 +2312,62 @@ function createSessionManager(options) {
         };
       });
 
+    const representedBranchRunIds = new Set(
+      rounds
+        .map((round) => round && round.branchRunId ? round.branchRunId : null)
+        .filter(Boolean)
+    );
+
+    strategyState.branchRuns.forEach((branchRun) => {
+      if (!branchRun || representedBranchRunIds.has(branchRun.id)) {
+        return;
+      }
+      const parentQuestionNode = branchRun.parentQuestionNodeId
+        ? findNodeById(log, branchRun.parentQuestionNodeId)
+        : findLatestQuestionNode(log, branchRun.parentQuestionId, { lane: 'mainline' });
+      rounds.push({
+        id: branchRun.id,
+        kind: 'round',
+        lane: 'branch',
+        nodeId: null,
+        parentRoundId: parentQuestionNode && parentQuestionNode.roundId
+          ? parentQuestionNode.roundId
+          : 'topic-root',
+        questionId: branchRun.currentQuestionId || null,
+        title: (branchRun.currentMessage && branchRun.currentMessage.title)
+          || (branchRun.resultSummary && branchRun.resultSummary.title)
+          || branchRun.title
+          || 'Branch round',
+        body: (branchRun.currentMessage && (branchRun.currentMessage.artifactPreviewText || branchRun.currentMessage.text || branchRun.currentMessage.description))
+          || (branchRun.resultSummary && branchRun.resultSummary.text)
+          || branchRun.description
+          || '',
+        previewText: (branchRun.currentMessage && (branchRun.currentMessage.artifactPreviewText || branchRun.currentMessage.text || branchRun.currentMessage.description))
+          || (branchRun.resultSummary && branchRun.resultSummary.text)
+          || branchRun.description
+          || '',
+        answerSummary: branchRun.resultSummary && branchRun.resultSummary.text
+          ? branchRun.resultSummary.text
+          : null,
+        sourceAnswer: {
+          optionId: branchRun.sourceOptionId || null,
+          label: branchRun.sourceOptionLabel || branchRun.title || branchRun.sourceOptionId || null
+        },
+        sourceOptionId: branchRun.sourceOptionId || null,
+        status: branchRun.status || 'paused',
+        isActive: activeRoundId === branchRun.id,
+        branchRunId: branchRun.id,
+        message: branchRun.currentMessage && branchRun.currentMessage.type === 'question'
+          ? clone(branchRun.currentMessage)
+          : null
+      });
+    });
+
     session.roundGraph = {
       schemaVersion: 1,
       topicNodeId: log.rootNodeId,
       currentMainlineRoundId,
-      activeRoundId,
+      activeRoundId: activeRoundId || strategyState.selectedBranchRunId || currentMainlineRoundId,
       rounds
     };
     return session.roundGraph;
@@ -2057,7 +2377,14 @@ function createSessionManager(options) {
     const state = normalizeStrategyState(strategyState);
     const selectedId = state.selectedBranchRunId;
     state.branchRuns = state.branchRuns.map((branchRun) => {
-      if (branchRun.resultSummary && !branchRun.currentMessage) {
+      const branchMessageType = branchRun.currentMessage && branchRun.currentMessage.type
+        ? branchRun.currentMessage.type
+        : null;
+      if (
+        branchRun.resultSummary
+        || branchMessageType === 'summary'
+        || branchMessageType === 'artifact_ready'
+      ) {
         return {
           ...branchRun,
           status: 'complete'
@@ -2095,77 +2422,264 @@ function createSessionManager(options) {
     return state.branchRuns.find((branchRun) => branchRun.id === state.selectedBranchRunId) || null;
   }
 
-  function createBranchRunsForSelection(session, question, selectedOptions) {
-    const state = normalizeSessionStrategyState(session);
+  function buildBranchRunRecord(session, anchorNode, question, option, existingBranchRun) {
     const now = nowIso();
-    const nextBranchRuns = Array.isArray(state.branchRuns) ? clone(state.branchRuns) : [];
-    const log = ensureSessionNodeLog(session);
-    const sourceQuestionNode = question && question.questionId
-      ? (findLatestQuestionNode(log, question.questionId, { lane: 'mainline' })
-        || appendQuestionNodeToLog(log, session, question, {
-          lane: 'mainline',
-          parentNodeId: log.rootNodeId,
-          edgeKind: 'seed'
-        }))
-      : findNodeById(log, log.rootNodeId);
+    const existing = existingBranchRun && typeof existingBranchRun === 'object'
+      ? clone(existingBranchRun)
+      : {};
+    const anchorQuestion = anchorNode && anchorNode.messageSnapshot && anchorNode.messageSnapshot.type === 'question'
+      ? clone(anchorNode.messageSnapshot)
+      : clone(question || null);
+    const anchorHistory = anchorNode && Array.isArray(anchorNode.historySnapshot)
+      ? cloneHistoryEntries(anchorNode.historySnapshot)
+      : cloneHistoryEntries(session.history || []);
+    const anchorStrategyState = anchorNode && anchorNode.strategyStateSnapshot
+      ? normalizeDetachedStrategyState(anchorNode.strategyStateSnapshot)
+      : normalizeDetachedStrategyState(session.strategyState);
+    const backendMode = existing.backendMode || session.backendMode || 'fake';
 
-    selectedOptions.forEach((option) => {
-      const branchRunId = buildBranchRunId(question && question.questionId, option && option.id);
-      const existingIndex = nextBranchRuns.findIndex((branchRun) => branchRun.id === branchRunId);
-      const baseBranchRun = {
-        id: branchRunId,
-        parentQuestionId: question && question.questionId ? question.questionId : null,
-        sourceOptionId: option && option.id ? option.id : null,
-        title: option && option.label ? option.label : branchRunId,
-        description: option && option.description ? option.description : '',
-        status: 'paused',
-        currentQuestionId: null,
-        currentMessage: null,
-        history: [],
-        resultSummary: null,
-        createdAt: now,
-        updatedAt: now
+    return {
+      ...existing,
+      id: existing.id || buildBranchRunId(anchorNode && anchorNode.id, option && option.id),
+      parentQuestionId: question && question.questionId ? question.questionId : null,
+      parentQuestionNodeId: anchorNode && anchorNode.id ? anchorNode.id : null,
+      sourceOptionId: option && option.id ? option.id : null,
+      sourceOptionLabel: option && option.label ? option.label : (option && option.id ? option.id : null),
+      title: option && option.label ? option.label : (existing.title || existing.id || 'Branch'),
+      description: option && option.description ? option.description : (existing.description || ''),
+      backendMode,
+      providerSession: existing.providerSession || createFreshBranchProviderSession(backendMode, session.completionMode),
+      strategyState: existing.strategyState
+        ? normalizeDetachedStrategyState(existing.strategyState)
+        : anchorStrategyState,
+      currentQuestionId: existing.currentQuestionId || (anchorQuestion && anchorQuestion.questionId ? anchorQuestion.questionId : null),
+      currentMessage: existing.currentMessage && !isLegacyBranchDetailQuestion(existing.currentMessage)
+        ? clone(existing.currentMessage)
+        : anchorQuestion,
+      history: Array.isArray(existing.history) && existing.history.length > 0
+        ? cloneHistoryEntries(existing.history)
+        : anchorHistory,
+      resultSummary: existing.resultSummary ? clone(existing.resultSummary) : null,
+      summary: existing.summary ? clone(existing.summary) : null,
+      artifact: existing.artifact ? clone(existing.artifact) : null,
+      anchorQuestion,
+      anchorHistory,
+      anchorStrategyState,
+      status: existing.status || 'queued',
+      createdAt: existing.createdAt || now,
+      updatedAt: now
+    };
+  }
+
+  async function submitRuntimeSnapshot(session, workflow, runtimeSnapshot, answer, action) {
+    const usesFallbackRuntime = runtimeSnapshot.backendMode === 'fake';
+    let next;
+    try {
+      if (usesFallbackRuntime) {
+        next = await withTimeout(
+          fallbackRuntimeAdapter.submitAnswer(runtimeSnapshot, answer),
+          runtimeSubmitTimeoutMs,
+          'fallback runtime submitAnswer'
+        );
+      } else {
+        next = await withTimeout(
+          runtimeAdapter.submitAnswer(runtimeSnapshot, answer),
+          runtimeSubmitTimeoutMs,
+          'runtime submitAnswer'
+        );
+      }
+    } catch (error) {
+      if (workflow.mode !== WORKFLOW_MODES.FULL_SKILL || !allowFakeRuntimeFallback) {
+        throw error;
+      }
+      recordWorkflowEvent(workflow, {
+        kind: 'runtime-fallback',
+        action,
+        fromBackendMode: runtimeSnapshot.backendMode || 'unknown',
+        error: error.message
+      });
+      next = await fallbackRuntimeAdapter.submitAnswer({
+        ...runtimeSnapshot,
+        backendMode: 'fake',
+        providerSession: createFreshBranchProviderSession('fake', session.completionMode),
+        strategyState: normalizeDetachedStrategyState(runtimeSnapshot.strategyState)
+      }, answer);
+    }
+    return next;
+  }
+
+  function applyBranchRuntimeState(branchRun, runtimeState) {
+    const nextBranchRun = clone(branchRun);
+    nextBranchRun.backendMode = runtimeState.backendMode || nextBranchRun.backendMode || null;
+    nextBranchRun.providerSession = runtimeState.providerSession || null;
+    nextBranchRun.strategyState = normalizeDetachedStrategyState(runtimeState.strategyState);
+    nextBranchRun.history = cloneHistoryEntries(runtimeState.history || []);
+    nextBranchRun.updatedAt = nowIso();
+    nextBranchRun.currentQuestionId = runtimeState.currentQuestionId || null;
+    nextBranchRun.currentMessage = runtimeState.currentMessage ? clone(runtimeState.currentMessage) : null;
+    nextBranchRun.summary = null;
+    nextBranchRun.artifact = null;
+
+    if (runtimeState.currentMessage && runtimeState.currentMessage.type === 'question') {
+      nextBranchRun.resultSummary = null;
+      nextBranchRun.status = 'paused';
+      return nextBranchRun;
+    }
+
+    if (runtimeState.currentMessage && runtimeState.currentMessage.type === 'summary') {
+      nextBranchRun.summary = clone(runtimeState.currentMessage);
+      nextBranchRun.resultSummary = {
+        title: runtimeState.currentMessage.title || nextBranchRun.title || 'Branch summary',
+        text: runtimeState.currentMessage.text || ''
       };
+      nextBranchRun.status = 'complete';
+      nextBranchRun.currentQuestionId = null;
+      return nextBranchRun;
+    }
+
+    if (runtimeState.currentMessage && runtimeState.currentMessage.type === 'artifact_ready') {
+      nextBranchRun.artifact = clone(runtimeState.currentMessage);
+      nextBranchRun.resultSummary = {
+        title: runtimeState.currentMessage.title || nextBranchRun.title || 'Branch artifact',
+        text: runtimeState.currentMessage.artifactPreviewText || runtimeState.currentMessage.text || ''
+      };
+      nextBranchRun.status = 'complete';
+      nextBranchRun.currentQuestionId = null;
+      return nextBranchRun;
+    }
+
+    return nextBranchRun;
+  }
+
+  function appendBranchNodeTransition(session, branchRun, previousQuestion, answer, options) {
+    const log = ensureSessionNodeLog(session);
+    const config = options || {};
+    const selectedBranchId = session.strategyState && session.strategyState.selectedBranchRunId
+      ? session.strategyState.selectedBranchRunId
+      : null;
+    const anchorNode = branchRun.parentQuestionNodeId
+      ? findNodeById(log, branchRun.parentQuestionNodeId)
+      : null;
+    const previousBranchQuestionNode = previousQuestion && previousQuestion.questionId
+      ? findLatestQuestionNode(log, previousQuestion.questionId, { branchRunId: branchRun.id })
+      : null;
+    const parentNodeId = previousBranchQuestionNode
+      ? previousBranchQuestionNode.id
+      : ((config.parentNodeId && findNodeById(log, config.parentNodeId))
+        ? config.parentNodeId
+        : (anchorNode ? anchorNode.id : log.rootNodeId));
+    const sourceAnswer = previousBranchQuestionNode
+      ? createAnswerSnapshot(previousQuestion, answer)
+      : createBranchOptionSnapshot(
+          previousQuestion || branchRun.anchorQuestion || { questionId: branchRun.parentQuestionId },
+          {
+            id: branchRun.sourceOptionId || null,
+            label: branchRun.sourceOptionLabel || branchRun.title || branchRun.sourceOptionId || null
+          }
+        );
+
+    if (branchRun.currentMessage && branchRun.currentMessage.type === 'question') {
+      appendQuestionNodeToLog(log, session, branchRun.currentMessage, {
+        lane: 'branch',
+        parentNodeId,
+        branchRunId: branchRun.id,
+        roundId: branchRun.id,
+        sourceOptionId: branchRun.sourceOptionId || null,
+        sourceAnswer,
+        edgeKind: previousBranchQuestionNode ? 'progression' : 'branch',
+        setActive: selectedBranchId === branchRun.id
+      });
+      syncNodeLogActiveNode(session);
+      refreshRoundGraph(session);
+      return;
+    }
+
+    if (
+      branchRun.currentMessage
+      && (branchRun.currentMessage.type === 'summary' || branchRun.currentMessage.type === 'artifact_ready')
+    ) {
+      appendResultNodeToLog(log, session, branchRun.currentMessage, {
+        lane: 'branch',
+        parentNodeId,
+        branchRunId: branchRun.id,
+        sourceAnswer,
+        edgeKind: previousBranchQuestionNode ? 'result' : 'branch',
+        setActive: selectedBranchId === branchRun.id
+      });
+      syncNodeLogActiveNode(session);
+      refreshRoundGraph(session);
+    }
+  }
+
+  async function createBranchRunsForSelection(session, anchorNode, question, selectedOptions, options) {
+    const config = options || {};
+    const state = normalizeSessionStrategyState(session);
+    const nextBranchRuns = Array.isArray(state.branchRuns) ? clone(state.branchRuns) : [];
+    const workflow = ensureWorkflow(session);
+    const createdBranchIds = [];
+    const transitions = [];
+
+    for (const option of selectedOptions) {
+      const branchRunId = buildBranchRunId(anchorNode && anchorNode.id, option && option.id);
+      const existingIndex = nextBranchRuns.findIndex((branchRun) => branchRun.id === branchRunId);
+      const existing = existingIndex >= 0 ? nextBranchRuns[existingIndex] : null;
+      if (existing && isRealBranchRun(existing)) {
+        createdBranchIds.push(existing.id);
+        continue;
+      }
+
+      const branchRun = buildBranchRunRecord(session, anchorNode, question, option, existing);
+      const branchAnswer = {
+        type: 'answer',
+        questionId: question && question.questionId ? question.questionId : null,
+        answerMode: option && option.id
+          ? structuredHost.ANSWER_MODES.OPTION
+          : structuredHost.ANSWER_MODES.TEXT,
+        optionIds: option && option.id ? [option.id] : [],
+        text: option && option.id ? null : (option && option.label ? option.label : null),
+        rawInput: option && option.id ? option.id : (option && option.label ? option.label : '')
+      };
+      const runtimeSnapshot = {
+        sessionId: branchRun.id,
+        seedPrompt: session.seedPrompt,
+        backendMode: branchRun.backendMode || session.backendMode || 'fake',
+        providerSession: branchRun.providerSession || createFreshBranchProviderSession(branchRun.backendMode || session.backendMode || 'fake', session.completionMode),
+        strategyState: normalizeDetachedStrategyState(branchRun.anchorStrategyState),
+        currentQuestionId: question && question.questionId ? question.questionId : null,
+        history: cloneHistoryEntries(branchRun.anchorHistory),
+        currentMessage: clone(question)
+      };
+      const nextRuntimeState = await submitRuntimeSnapshot(session, workflow, runtimeSnapshot, branchAnswer, 'branch-create');
+      const nextBranchRun = applyBranchRuntimeState(branchRun, nextRuntimeState);
 
       if (existingIndex >= 0) {
-        const existing = nextBranchRuns[existingIndex];
-        nextBranchRuns[existingIndex] = {
-          ...existing,
-          title: baseBranchRun.title,
-          description: baseBranchRun.description,
-          parentQuestionId: baseBranchRun.parentQuestionId,
-          sourceOptionId: baseBranchRun.sourceOptionId,
-          updatedAt: now
-        };
+        nextBranchRuns[existingIndex] = nextBranchRun;
       } else {
-        const initialized = {
-          ...baseBranchRun
-        };
-        initialized.currentMessage = buildBranchRunQuestion(initialized);
-        initialized.currentQuestionId = initialized.currentMessage.questionId;
-        nextBranchRuns.push(initialized);
+        nextBranchRuns.push(nextBranchRun);
       }
-
-      const branchRun = existingIndex >= 0 ? nextBranchRuns[existingIndex] : nextBranchRuns[nextBranchRuns.length - 1];
-      if (branchRun && branchRun.currentMessage && branchRun.currentQuestionId) {
-        appendQuestionNodeToLog(log, session, {
-          ...branchRun.currentMessage,
-          questionId: branchRun.currentQuestionId
-        }, {
-          lane: 'branch',
-          parentNodeId: sourceQuestionNode ? sourceQuestionNode.id : log.rootNodeId,
-          branchRunId,
-          roundId: branchRunId,
-          sourceOptionId: option && option.id ? option.id : null,
-          sourceAnswer: createBranchOptionSnapshot(question, option),
-          edgeKind: 'branch'
-        });
-      }
-    });
+      createdBranchIds.push(nextBranchRun.id);
+      transitions.push({
+        branchRun: nextBranchRun,
+        previousQuestion: question,
+        answer: branchAnswer,
+        parentNodeId: anchorNode && anchorNode.id ? anchorNode.id : null
+      });
+    }
 
     state.branchRuns = nextBranchRuns;
-    state.selectedBranchRunId = null;
+    if (config.selectBranchId) {
+      state.selectedBranchRunId = config.selectBranchId;
+    } else if (config.selectFirstCreated && createdBranchIds.length > 0) {
+      state.selectedBranchRunId = createdBranchIds[0];
+    } else if (config.clearSelection !== false) {
+      state.selectedBranchRunId = null;
+    }
     session.strategyState = refreshBranchRunStatuses(state);
+    transitions.forEach((transition) => {
+      appendBranchNodeTransition(session, transition.branchRun, transition.previousQuestion, transition.answer, {
+        parentNodeId: transition.parentNodeId
+      });
+    });
     syncNodeLogActiveNode(session);
     refreshRoundGraph(session);
     return session.strategyState;
@@ -2256,6 +2770,64 @@ function createSessionManager(options) {
     return checkpoint;
   }
 
+  function migrateLegacyBranchRuns(session) {
+    const log = session && session.nodeLog && Array.isArray(session.nodeLog.nodes)
+      ? session.nodeLog
+      : null;
+    if (!log) {
+      return false;
+    }
+    const state = normalizeSessionStrategyState(session);
+    let changed = false;
+    state.branchRuns = state.branchRuns.map((branchRun) => {
+      let nextBranchRun = branchRun;
+      const parentQuestionNode = nextBranchRun.parentQuestionNodeId
+        ? findNodeById(log, nextBranchRun.parentQuestionNodeId)
+        : findLatestQuestionNode(log, nextBranchRun.parentQuestionId, { lane: 'mainline' });
+
+      if (parentQuestionNode && !nextBranchRun.parentQuestionNodeId) {
+        nextBranchRun = {
+          ...nextBranchRun,
+          parentQuestionNodeId: parentQuestionNode.id
+        };
+        changed = true;
+      }
+      if (parentQuestionNode && !nextBranchRun.anchorQuestion && parentQuestionNode.messageSnapshot) {
+        nextBranchRun = {
+          ...nextBranchRun,
+          anchorQuestion: clone(parentQuestionNode.messageSnapshot)
+        };
+        changed = true;
+      }
+      if (parentQuestionNode && (!Array.isArray(nextBranchRun.anchorHistory) || nextBranchRun.anchorHistory.length === 0)) {
+        nextBranchRun = {
+          ...nextBranchRun,
+          anchorHistory: cloneHistoryEntries(parentQuestionNode.historySnapshot || [])
+        };
+        changed = true;
+      }
+      if (parentQuestionNode && !nextBranchRun.anchorStrategyState && parentQuestionNode.strategyStateSnapshot) {
+        nextBranchRun = {
+          ...nextBranchRun,
+          anchorStrategyState: normalizeDetachedStrategyState(parentQuestionNode.strategyStateSnapshot)
+        };
+        changed = true;
+      }
+      if (!nextBranchRun.sourceOptionLabel && (nextBranchRun.title || nextBranchRun.sourceOptionId)) {
+        nextBranchRun = {
+          ...nextBranchRun,
+          sourceOptionLabel: nextBranchRun.title || nextBranchRun.sourceOptionId || null
+        };
+        changed = true;
+      }
+      return nextBranchRun;
+    });
+    if (changed) {
+      session.strategyState = refreshBranchRunStatuses(state);
+    }
+    return changed;
+  }
+
   function loadSession(sessionId) {
     const filePath = sessionFile(sessionId);
     if (!fs.existsSync(filePath)) {
@@ -2263,12 +2835,17 @@ function createSessionManager(options) {
     }
     const session = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
     ensureSessionProcessing(session);
+    const lifecycleChanged = reconcileSessionProcessingLifecycle(session);
     const workflow = ensureWorkflow(session);
     workflow.review.retryBudget = reviewRetryBudget;
-    ensureBranchSelection(session);
     ensureSessionNodeLog(session);
+    migrateLegacyBranchRuns(session);
+    ensureBranchSelection(session);
     refreshRoundGraph(session);
     syncFinishedResult(session);
+    if (lifecycleChanged) {
+      persistSession(session);
+    }
     return session;
   }
 
@@ -2280,7 +2857,8 @@ function createSessionManager(options) {
     const jobRecord = {
       sessionId,
       action,
-      jobId: expectedJobId
+      jobId: expectedJobId,
+      heartbeatTimer: null
     };
     runningJobs.set(sessionId, jobRecord);
 
@@ -2299,21 +2877,24 @@ function createSessionManager(options) {
 
           const processing = ensureSessionProcessing(session);
           if (
-            processing.state !== 'running'
-            || processing.action !== action
+            processing.action !== action
             || processing.jobId !== expectedJobId
+            || (processing.state !== 'running' && processing.state !== 'cancelled')
           ) {
             return;
           }
 
-          markSessionProcessingStarted(session, expectedJobId);
-          persistSession(session);
+          if (processing.state === 'running') {
+            markSessionProcessingStarted(session, expectedJobId);
+            persistSession(session);
+            jobRecord.heartbeatTimer = startProcessingHeartbeat(sessionId, action, expectedJobId);
+          }
           await runner(session, processing);
         })
         .catch((error) => {
           try {
             const session = loadSession(sessionId);
-            if (failSessionProcessing(session, expectedJobId, error)) {
+            if (markSessionProcessingRetryable(session, expectedJobId, error)) {
               persistSession(session);
             }
           } catch (loadError) {
@@ -2323,6 +2904,10 @@ function createSessionManager(options) {
           }
         })
         .finally(() => {
+          if (jobRecord.heartbeatTimer) {
+            clearInterval(jobRecord.heartbeatTimer);
+            jobRecord.heartbeatTimer = null;
+          }
           const current = runningJobs.get(sessionId);
           if (current && current.jobId === expectedJobId) {
             runningJobs.delete(sessionId);
@@ -2334,24 +2919,8 @@ function createSessionManager(options) {
   }
 
   function ensureBackgroundJobForSession(session) {
-    if (!backgroundProcessing) {
-      return;
-    }
-    const processing = ensureSessionProcessing(session);
-    if (
-      processing.state !== 'running'
-      || !processing.action
-      || !processing.jobId
-      || runningJobs.has(session.id)
-    ) {
-      return;
-    }
-    if (processing.action === 'create') {
-      queueCreateProcessing(session.id, processing.jobId);
-      return;
-    }
-    if (processing.action === 'submit') {
-      queueSubmitProcessing(session.id, processing.jobId);
+    if (reconcileSessionProcessingLifecycle(session)) {
+      persistSession(session);
     }
   }
 
@@ -2825,6 +3394,9 @@ function createSessionManager(options) {
       const processing = ensureSessionProcessing(session);
       const pendingInput = processing.pendingInput || {};
       await executeRuntimeCreate(session, pendingInput);
+      if (!loadSessionIfJobCurrent(sessionId, 'create', expectedJobId)) {
+        return;
+      }
       clearSessionProcessing(session, expectedJobId);
       persistSession(session);
     });
@@ -2852,13 +3424,7 @@ function createSessionManager(options) {
   function listSessions() {
     return fs.readdirSync(sessionsDir)
       .filter((entry) => entry.endsWith('.json'))
-      .map((entry) => {
-        const session = JSON.parse(fs.readFileSync(path.join(sessionsDir, entry), 'utf-8'));
-        ensureSessionProcessing(session);
-        ensureWorkflow(session);
-        ensureBackgroundJobForSession(session);
-        return session;
-      })
+      .map((entry) => loadSession(path.basename(entry, '.json')))
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
       .map((session) => ({
         id: session.id,
@@ -2881,9 +3447,7 @@ function createSessionManager(options) {
   }
 
   function getSession(sessionId) {
-    const session = loadSession(sessionId);
-    ensureBackgroundJobForSession(session);
-    return clone(session);
+    return clone(loadSession(sessionId));
   }
 
   function deleteSession(sessionId) {
@@ -2903,6 +3467,10 @@ function createSessionManager(options) {
     }
 
     fs.unlinkSync(filePath);
+    const runningJob = runningJobs.get(sessionId);
+    if (runningJob && runningJob.heartbeatTimer) {
+      clearInterval(runningJob.heartbeatTimer);
+    }
     runningJobs.delete(sessionId);
     return {
       id: sessionId,
@@ -3014,10 +3582,35 @@ function createSessionManager(options) {
       .filter(Boolean);
   }
 
-  async function submitBranchMaterialization(session, workflow, input) {
+  function resolveHistoricalBranchAnchorNode(session, answer) {
+    const contextSelection = answer && answer.contextSelection && typeof answer.contextSelection === 'object'
+      ? answer.contextSelection
+      : null;
+    if (!contextSelection || contextSelection.type !== 'mainline' || !contextSelection.nodeId) {
+      return null;
+    }
+    const log = ensureSessionNodeLog(session);
+    const anchorNode = findNodeById(log, contextSelection.nodeId);
+    if (!anchorNode || anchorNode.kind !== 'question' || anchorNode.lane !== 'mainline') {
+      return null;
+    }
+    if (anchorNode.id === log.mainlineActiveNodeId && !getSelectedBranchRun(session)) {
+      return null;
+    }
+    return anchorNode;
+  }
+
+  function persistSubmitSession(session, submitContext) {
+    const expectedJobId = submitContext && submitContext.expectedJobId
+      ? submitContext.expectedJobId
+      : null;
+    return persistSessionWithJobGuard(session, expectedJobId, 'submit');
+  }
+
+  async function submitBranchMaterialization(session, workflow, input, submitContext) {
     const mainlineQuestion = session.currentMessage;
     const normalizedAnswer = toStandardAnswerPayload(mainlineQuestion, input);
-    const selectedOptions = resolveSelectedOptions(mainlineQuestion, normalizedAnswer);
+    const selectedOptions = resolveBranchSelectionEntries(mainlineQuestion, normalizedAnswer);
     const minimum = mainlineQuestion
       && mainlineQuestion.branching
       && typeof mainlineQuestion.branching.minOptionCount === 'number'
@@ -3028,6 +3621,15 @@ function createSessionManager(options) {
       throw new Error(`Select at least ${minimum} options before exploring them as branches.`);
     }
 
+    const log = ensureSessionNodeLog(session);
+    const sourceQuestionNode = mainlineQuestion && mainlineQuestion.questionId
+      ? (findLatestQuestionNode(log, mainlineQuestion.questionId, { lane: 'mainline' })
+        || appendQuestionNodeToLog(log, session, mainlineQuestion, {
+          lane: 'mainline',
+          parentNodeId: log.rootNodeId,
+          edgeKind: 'seed'
+        }))
+      : findNodeById(log, log.rootNodeId);
     const runtimeSnapshot = {
       sessionId: session.id,
       seedPrompt: session.seedPrompt,
@@ -3074,12 +3676,14 @@ function createSessionManager(options) {
     session.updatedAt = new Date().toISOString();
     applyRuntimeMessage(session, next);
     appendMainlineNodeTransition(session, mainlineQuestion, normalizedAnswer);
-    createBranchRunsForSelection(session, mainlineQuestion, selectedOptions);
-    persistSession(session);
+    await createBranchRunsForSelection(session, sourceQuestionNode, mainlineQuestion, selectedOptions, {
+      clearSelection: true
+    });
+    persistSubmitSession(session, submitContext);
     return clone(session);
   }
 
-  async function submitBranchRunAnswer(session, branchRun, input) {
+  async function submitBranchRunAnswer(session, branchRun, input, submitContext) {
     if (!branchRun.currentMessage || branchRun.currentMessage.type !== 'question') {
       return clone(session);
     }
@@ -3096,21 +3700,63 @@ function createSessionManager(options) {
       throw new Error(`Unknown branch run: ${branchRun.id}`);
     }
 
+    if (!isRealBranchRun(branchRun) && isLegacyBranchDetailQuestion(branchRun.currentMessage)) {
+      const nextBranchRun = clone(state.branchRuns[index]);
+      nextBranchRun.history = (nextBranchRun.history || []).concat(createHistoryEntry(branchRun.currentMessage, normalizedAnswer));
+      nextBranchRun.resultSummary = {
+        title: `${nextBranchRun.title} branch note`,
+        text: answerLabel
+      };
+      nextBranchRun.currentQuestionId = null;
+      nextBranchRun.currentMessage = null;
+      nextBranchRun.updatedAt = nowIso();
+      nextBranchRun.status = 'complete';
+      state.branchRuns[index] = nextBranchRun;
+      session.strategyState = refreshBranchRunStatuses(state);
+      appendBranchRunResult(session, nextBranchRun, branchRun.currentMessage, normalizedAnswer, nextBranchRun.resultSummary);
+      session.updatedAt = nowIso();
+      persistSubmitSession(session, submitContext);
+      return clone(session);
+    }
+
     const nextBranchRun = clone(state.branchRuns[index]);
-    nextBranchRun.history = (nextBranchRun.history || []).concat(createHistoryEntry(branchRun.currentMessage, normalizedAnswer));
-    nextBranchRun.resultSummary = {
-      title: `${nextBranchRun.title} branch note`,
-      text: answerLabel
+    const runtimeSnapshot = {
+      sessionId: nextBranchRun.id,
+      seedPrompt: session.seedPrompt,
+      backendMode: nextBranchRun.backendMode || session.backendMode || 'fake',
+      providerSession: nextBranchRun.providerSession || createFreshBranchProviderSession(nextBranchRun.backendMode || session.backendMode || 'fake', session.completionMode),
+      strategyState: normalizeDetachedStrategyState(nextBranchRun.strategyState || nextBranchRun.anchorStrategyState),
+      currentQuestionId: branchRun.currentQuestionId || (branchRun.currentMessage && branchRun.currentMessage.questionId ? branchRun.currentMessage.questionId : null),
+      history: cloneHistoryEntries(nextBranchRun.history),
+      currentMessage: clone(branchRun.currentMessage)
     };
-    nextBranchRun.currentQuestionId = null;
-    nextBranchRun.currentMessage = null;
-    nextBranchRun.updatedAt = nowIso();
-    nextBranchRun.status = 'complete';
-    state.branchRuns[index] = nextBranchRun;
+    const nextRuntimeState = await submitRuntimeSnapshot(session, ensureWorkflow(session), runtimeSnapshot, normalizedAnswer, 'branch-submit');
+    const appliedBranchRun = applyBranchRuntimeState(nextBranchRun, nextRuntimeState);
+    state.branchRuns[index] = appliedBranchRun;
     session.strategyState = refreshBranchRunStatuses(state);
-    appendBranchRunResult(session, nextBranchRun, branchRun.currentMessage, normalizedAnswer, nextBranchRun.resultSummary);
+    appendBranchNodeTransition(session, appliedBranchRun, branchRun.currentMessage, normalizedAnswer, {});
     session.updatedAt = nowIso();
-    persistSession(session);
+    persistSubmitSession(session, submitContext);
+    return clone(session);
+  }
+
+  async function submitHistoricalBranchAnswer(session, workflow, input, submitContext) {
+    const anchorNode = resolveHistoricalBranchAnchorNode(session, input);
+    if (!anchorNode || !anchorNode.messageSnapshot || anchorNode.messageSnapshot.type !== 'question') {
+      return null;
+    }
+    const frozenQuestion = clone(anchorNode.messageSnapshot);
+    const normalizedAnswer = toStandardAnswerPayload(frozenQuestion, input);
+    const selectedOptions = resolveBranchSelectionEntries(frozenQuestion, normalizedAnswer);
+    if (selectedOptions.length === 0) {
+      throw new Error('Select at least one option before starting a branch from this historical question.');
+    }
+    await createBranchRunsForSelection(session, anchorNode, frozenQuestion, selectedOptions, {
+      selectFirstCreated: true,
+      clearSelection: false
+    });
+    session.updatedAt = nowIso();
+    persistSubmitSession(session, submitContext);
     return clone(session);
   }
 
@@ -3122,7 +3768,7 @@ function createSessionManager(options) {
     return clone(session);
   }
 
-  async function submitAnswerSync(sessionId, answer) {
+  async function submitAnswerSync(sessionId, answer, submitContext) {
     const session = loadSession(sessionId);
     const workflow = ensureWorkflow(session);
     if (!session.currentMessage || session.currentMessage.type !== 'question') {
@@ -3131,10 +3777,13 @@ function createSessionManager(options) {
 
     const selectedBranchRun = getSelectedBranchRun(session);
     if (answer && answer.type === 'branch_materialize') {
-      return submitBranchMaterialization(session, workflow, answer);
+      return submitBranchMaterialization(session, workflow, answer, submitContext);
+    }
+    if (resolveHistoricalBranchAnchorNode(session, answer)) {
+      return submitHistoricalBranchAnswer(session, workflow, answer, submitContext);
     }
     if (selectedBranchRun && selectedBranchRun.currentMessage && selectedBranchRun.currentMessage.type === 'question') {
-      return submitBranchRunAnswer(session, selectedBranchRun, answer);
+      return submitBranchRunAnswer(session, selectedBranchRun, answer, submitContext);
     }
 
     if (workflow.mode === WORKFLOW_MODES.FULL_SKILL) {
@@ -3161,7 +3810,7 @@ function createSessionManager(options) {
           session.currentMessage = createWorkflowRevisionQuestion(workflow);
           appendMainlineNodeTransition(session, previousQuestion, answer);
         }
-        persistSession(session);
+        persistSubmitSession(session, submitContext);
         return clone(session);
       }
 
@@ -3172,7 +3821,7 @@ function createSessionManager(options) {
         workflow.review = createInitialReviewState();
         await runWorkflowSpecDraft(session, answer.text || answer.rawInput || '');
         appendMainlineNodeTransition(session, previousQuestion, answer);
-        persistSession(session);
+        persistSubmitSession(session, submitContext);
         return clone(session);
       }
     }
@@ -3265,7 +3914,7 @@ function createSessionManager(options) {
       });
       await runWorkflowSpecDraft(session, null);
     }
-    persistSession(session);
+    persistSubmitSession(session, submitContext);
     return clone(session);
   }
 
@@ -3279,8 +3928,11 @@ function createSessionManager(options) {
         error.code = 'INVALID_PROCESSING_STATE';
         throw error;
       }
-      await submitAnswerSync(sessionId, pendingInput);
-      const updated = loadSession(sessionId);
+      await submitAnswerSync(sessionId, pendingInput, { expectedJobId });
+      const updated = loadSessionIfJobCurrent(sessionId, 'submit', expectedJobId);
+      if (!updated) {
+        return;
+      }
       clearSessionProcessing(updated, expectedJobId);
       persistSession(updated);
     });
@@ -3306,6 +3958,56 @@ function createSessionManager(options) {
     persistSession(session);
     queueSubmitProcessing(session.id, nextProcessing.jobId);
     return clone(session);
+  }
+
+  function runSessionLifecycleAction(sessionId, action) {
+    const normalizedAction = typeof action === 'string' ? action.trim().toLowerCase() : '';
+    const session = loadSession(sessionId);
+    const processing = ensureSessionProcessing(session);
+
+    if (normalizedAction === 'retry') {
+      if (processing.state !== 'retryable' || !processing.action) {
+        const error = new Error('Retry is only available for retryable background steps.');
+        error.code = 'INVALID_LIFECYCLE_ACTION';
+        throw error;
+      }
+      const pendingInput = clonePendingInput(processing.pendingInput);
+      if (!pendingInput || typeof pendingInput !== 'object') {
+        const error = new Error('This retryable session has no persisted input to replay.');
+        error.code = 'INVALID_LIFECYCLE_ACTION';
+        throw error;
+      }
+      const nextProcessing = beginSessionProcessing(session, processing.action, pendingInput);
+      persistSession(session);
+      if (nextProcessing.action === 'create') {
+        queueCreateProcessing(session.id, nextProcessing.jobId);
+      } else {
+        queueSubmitProcessing(session.id, nextProcessing.jobId);
+      }
+      return clone(session);
+    }
+
+    if (normalizedAction === 'cancel') {
+      if (processing.state !== 'running' && processing.state !== 'retryable') {
+        const error = new Error('Cancel is only available while a background step is running or retryable.');
+        error.code = 'INVALID_LIFECYCLE_ACTION';
+        throw error;
+      }
+      markSessionProcessingCancelled(session, processing.jobId);
+      persistSession(session);
+      const runningJob = runningJobs.get(sessionId);
+      if (runningJob && runningJob.jobId === processing.jobId) {
+        if (runningJob.heartbeatTimer) {
+          clearInterval(runningJob.heartbeatTimer);
+        }
+        runningJobs.delete(sessionId);
+      }
+      return clone(session);
+    }
+
+    const error = new Error(`Unknown lifecycle action: ${action}`);
+    error.code = 'INVALID_LIFECYCLE_ACTION';
+    throw error;
   }
 
   function getArtifactContent(sessionId) {
@@ -4332,6 +5034,7 @@ function createSessionManager(options) {
     getSessionInspection,
     getSessionProvenance,
     submitAnswer,
+    runSessionLifecycleAction,
     selectSessionBranchContext,
     getArtifactContent,
     attachResearchWorkspace,

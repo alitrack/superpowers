@@ -103,9 +103,9 @@ function layoutElements(nodes, edges) {
   const graph = new dagre.graphlib.Graph();
   graph.setDefaultEdgeLabel(() => ({}));
   graph.setGraph({
-    rankdir: 'LR',
-    nodesep: 34,
-    ranksep: 74,
+    rankdir: 'TB',
+    nodesep: 42,
+    ranksep: 96,
     marginx: 24,
     marginy: 24
   });
@@ -160,12 +160,12 @@ function BaseNode({ data, children, selected }) {
 
   return (
     <div className={className} onClick={handleInspect}>
-      <Handle type="target" position={Position.Left} isConnectable={false} />
+      <Handle type="target" position={Position.Top} isConnectable={false} />
       <div className="brainstorm-flow-node__badge">{data.badge}</div>
       <h3 className="brainstorm-flow-node__title">{data.title}</h3>
       {data.body ? <p className="brainstorm-flow-node__body">{data.body}</p> : null}
       {children}
-      <Handle type="source" position={Position.Right} isConnectable={false} />
+      <Handle type="source" position={Position.Bottom} isConnectable={false} />
     </div>
   );
 }
@@ -199,7 +199,10 @@ function DecisionNode({ data, selected }) {
       compact: Boolean(data.compact),
       onAnswer(answer) {
         if (typeof data.onAnswer === 'function') {
-          data.onAnswer(answer);
+          data.onAnswer({
+            ...answer,
+            contextSelection: data.contextSelection || null
+          });
         }
       }
     });
@@ -288,7 +291,10 @@ function BranchRunNode({ data, selected }) {
       compact: Boolean(data.compact),
       onAnswer(answer) {
         if (typeof data.onAnswer === 'function') {
-          data.onAnswer(answer);
+          data.onAnswer({
+            ...answer,
+            contextSelection: data.contextSelection || null
+          });
         }
       }
     });
@@ -400,7 +406,7 @@ function GraphCanvas({ graph, onAnswer, onInspect }) {
       data: {
         ...node.data,
         onAnswer,
-        onInspect: () => onInspect(node.id)
+        onInspect: () => onInspect(node.id, node.data && node.data.contextSelection ? node.data.contextSelection : null)
       }
     })), rawEdges);
   }, [graph, onAnswer, onInspect]);

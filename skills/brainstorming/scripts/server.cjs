@@ -251,6 +251,9 @@ function getErrorStatus(error, fallbackStatus) {
   if (error.code === 'RUNTIME_TIMEOUT') {
     return 504;
   }
+  if (error.code === 'INVALID_LIFECYCLE_ACTION') {
+    return 400;
+  }
   if (typeof error.message === 'string' && error.message.startsWith('Unknown session:')) {
     return 404;
   }
@@ -752,6 +755,24 @@ function handleApiRequest(req, res, pathname, requestUrl) {
         sendJson(res, 200, session);
       } catch (submitError) {
         sendJson(res, getErrorStatus(submitError, 500), { error: submitError.message });
+      }
+    });
+    return;
+  }
+
+  const lifecycleMatch = pathname.match(/^\/api\/sessions\/([^/]+)\/lifecycle$/);
+  if (req.method === 'POST' && lifecycleMatch) {
+    parseJsonBody(req, (error, body) => {
+      if (error) {
+        sendJson(res, 400, { error: 'Invalid JSON body' });
+        return;
+      }
+      try {
+        const action = typeof body.action === 'string' ? body.action : '';
+        const session = webSessionManager.runSessionLifecycleAction(lifecycleMatch[1], action);
+        sendJson(res, 200, session);
+      } catch (lifecycleError) {
+        sendJson(res, getErrorStatus(lifecycleError, 500), { error: lifecycleError.message });
       }
     });
     return;

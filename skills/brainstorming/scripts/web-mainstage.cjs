@@ -532,6 +532,16 @@
     return branchRuns.find((branchRun) => branchRun.id === selectedId) || null;
   }
 
+  function canStartBranchFromRound(round) {
+    return Boolean(
+      round
+      && round.lane === 'mainline'
+      && round.status !== 'active'
+      && round.message
+      && round.message.type === 'question'
+    );
+  }
+
   function buildCurrentChoiceOptions(session, workspaceMode) {
     const message = session && session.currentMessage && typeof session.currentMessage === 'object'
       ? session.currentMessage
@@ -620,6 +630,8 @@
       answerSummary: resolved.answerSummary || null,
       sourceAnswer: resolved.sourceAnswer || null,
       sourceOptionId: resolved.sourceOptionId || null,
+      branchRunId: resolved.branchRunId || null,
+      questionNodeId: resolved.questionNodeId || null,
       depth: typeof resolved.depth === 'number' ? resolved.depth : 0,
       status: resolved.status || 'context',
       isActive: Boolean(resolved.isActive),
@@ -700,6 +712,8 @@
           questionId: round.questionId || null,
           parentId: round.parentRoundId || 'topic-root',
           lane: round.lane || null,
+          branchRunId: round.branchRunId || null,
+          questionNodeId: round.nodeId || null,
           message: Object.prototype.hasOwnProperty.call(resolved, 'message')
             ? resolved.message
             : (round.message || null),
@@ -721,15 +735,13 @@
     }
 
     const completedMainlineRounds = mainlineRounds.filter((round) => round.id !== currentMainlineRoundId);
-    const pathRounds = visibleHistory.length > 0
-      ? completedMainlineRounds.slice(Math.max(0, completedMainlineRounds.length - visibleHistory.length))
-      : completedMainlineRounds;
+    const pathRounds = completedMainlineRounds;
     const parentPath = pathRounds.map((round, index) => createRoundNode(round, {
       badge: 'Answered Round',
       label: `Round ${index + 1}`,
       status: round.status || 'complete',
       depth: index + 1,
-      readOnly: true
+      readOnly: !canStartBranchFromRound(round)
     }));
 
     let decisionNode = null;
@@ -956,7 +968,7 @@
     };
   }
 
-  function buildGraphWorkspace(session, treeCanvas, completion, inspector) {
+  function buildGraphWorkspace(session, treeCanvas, completion, inspector, workspaceMode) {
     const nodes = [];
     const edges = [];
     const pathNodes = Array.isArray(treeCanvas && treeCanvas.parentPath) ? treeCanvas.parentPath : [];
@@ -995,9 +1007,11 @@
         data: {
           contextSelection: {
             type: 'mainline',
-            questionId: node.questionId || null
+            questionId: node.questionId || null,
+            roundId: node.id,
+            nodeId: node.questionNodeId || null
           },
-          readOnly: !node.isActive
+          readOnly: node.readOnly
         },
         dragHandle: node.isActive ? '.brainstorm-flow-node__drag-handle' : null
       }));
@@ -1031,9 +1045,11 @@
         data: {
           contextSelection: {
             type: 'branch-run',
-            branchRunId: node.id
+            branchRunId: node.branchRunId || node.id,
+            roundId: node.id,
+            nodeId: node.questionNodeId || null
           },
-          readOnly: !node.isActive
+          readOnly: node.readOnly
         },
         dragHandle: node.isActive ? '.brainstorm-flow-node__drag-handle' : null
       }));
@@ -1150,7 +1166,19 @@
           ? decisionNode.id
           : (artifactNode ? artifactNode.id : (convergenceNode ? convergenceNode.id : (topicNode ? topicNode.id : null)))),
       selectedNodeId: inspector && inspector.selectedNodeId ? inspector.selectedNodeId : null,
-      fitNodeIds: fitNodeIds.length > 0 ? fitNodeIds : nodes.map((node) => node.id)
+      fitNodeIds: fitNodeIds.length > 0 ? fitNodeIds : nodes.map((node) => node.id),
+      layoutSignature: JSON.stringify({
+        nodeIds: nodes.map((node) => node.id),
+        edgeIds: edges.map((edge) => edge.id),
+        focusNodeId: activeNode
+          ? activeNode.id
+          : (decisionNode
+            ? decisionNode.id
+            : (artifactNode ? artifactNode.id : (convergenceNode ? convergenceNode.id : (topicNode ? topicNode.id : null)))),
+        selectedNodeId: inspector && inspector.selectedNodeId ? inspector.selectedNodeId : null,
+        workspaceMode,
+        fitNodeIds: fitNodeIds.length > 0 ? fitNodeIds : nodes.map((node) => node.id)
+      })
     };
   }
 
@@ -1176,7 +1204,7 @@
     );
     treeCanvas.selectedNodeId = resolvedOptions.inspectedCardId || null;
     const inspector = buildInspector(treeCanvas, completion, stage, supportingArtifact);
-    const graphWorkspace = buildGraphWorkspace(session, treeCanvas, completion, inspector);
+    const graphWorkspace = buildGraphWorkspace(session, treeCanvas, completion, inspector, workspaceMode);
     graphWorkspace.workspaceMode = workspaceMode;
 
     return {

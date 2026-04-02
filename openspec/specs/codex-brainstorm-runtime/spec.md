@@ -31,7 +31,7 @@ The system MUST allow real Codex-backed create and submit turns to continue in b
 - **THEN** the backend normalizes the resulting `question`, `summary`, or `artifact_ready` message into the shared transport contract and persists it onto the session
 
 ### Requirement: Real runtime sessions can resume after page reload
-The system MUST persist enough provider-backed session state to continue a brainstorming session after reload without silently restarting from the root demo question, including sessions whose current turn is still being processed in background.
+The system MUST persist enough provider-backed session state to continue a brainstorming session after reload without silently restarting from the root demo question, including sessions whose current turn is still being processed in background and real child branch sessions rooted at historical question snapshots.
 
 #### Scenario: App-server backed session is reloaded
 - **WHEN** the browser reopens an existing session that uses the app-server backend
@@ -44,6 +44,14 @@ The system MUST persist enough provider-backed session state to continue a brain
 #### Scenario: Background turn is recovered after reload
 - **WHEN** the browser reloads a session whose persisted processing state says a real-runtime turn is still running
 - **THEN** the system resumes or replays that queued turn from persisted state and eventually writes the next structured message back onto the same session
+
+#### Scenario: Branch session is reloaded
+- **WHEN** the browser reopens a topic session that contains persisted child branches
+- **THEN** the system restores each branch's persisted backend identity or replayable runtime snapshot so that the selected branch can continue from its own current question
+
+#### Scenario: Branch session starts from a historical question option
+- **WHEN** the user opens a new branch from a frozen question snapshot and selected option
+- **THEN** the runtime starts a new isolated branch continuation context from that snapshot instead of reusing the mainline provider session in place
 
 ### Requirement: Runtime outputs are normalized into the shared structured transport contract
 The system MUST translate real Codex runtime outputs into the existing `question`, `summary`, and `artifact_ready` messages consumed by browser and future GUI hosts.

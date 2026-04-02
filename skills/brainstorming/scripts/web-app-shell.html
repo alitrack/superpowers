@@ -925,6 +925,7 @@
         <p id="request-status-copy">Creating artifact session. The first real-runtime step can take a while; please wait.</p>
         <div class="request-actions">
           <button id="request-status-retry" type="button" hidden>Try again</button>
+          <button id="request-status-cancel" type="button" hidden>Cancel</button>
         </div>
       </section>
 
@@ -1013,6 +1014,7 @@
       const requestStatusTitleEl = document.getElementById('request-status-title');
       const requestStatusCopyEl = document.getElementById('request-status-copy');
       const requestStatusRetryEl = document.getElementById('request-status-retry');
+      const requestStatusCancelEl = document.getElementById('request-status-cancel');
       const workspaceModeFocusedEl = document.getElementById('workspace-mode-focused');
       const workspaceModeOverviewEl = document.getElementById('workspace-mode-overview');
 
@@ -1030,7 +1032,8 @@
         scope: null,
         title: '',
         copy: '',
-        retry: null
+        retry: null,
+        cancel: null
       };
 
       function escapeHtml(value) {
@@ -1103,6 +1106,33 @@
         return Boolean(processing && processing.state === 'running');
       }
 
+      async function runLifecycleAction(action) {
+        if (!window.currentSessionId) {
+          return;
+        }
+        const sessionId = window.currentSessionId;
+        const actionLabel = action === 'retry' ? 'Retrying background step' : 'Cancelling background step';
+        setRequestState({
+          phase: 'pending',
+          scope: 'lifecycle',
+          title: actionLabel,
+          copy: 'Updating the persisted session lifecycle state. Please wait.'
+        });
+        try {
+          const session = await api('POST', `/api/sessions/${sessionId}/lifecycle`, { action });
+          clearRequestState();
+          await renderSession(session);
+        } catch (error) {
+          setRequestState({
+            phase: 'error',
+            scope: 'lifecycle',
+            title: `${action === 'retry' ? 'Retry' : 'Cancel'} failed`,
+            copy: error.message,
+            retry: () => runLifecycleAction(action)
+          });
+        }
+      }
+
       function getDerivedRequestState(session) {
         const processing = getSessionProcessing(session);
         if (!processing) {
@@ -1115,25 +1145,38 @@
               phase: 'pending',
               scope: 'processing',
               title: 'Preparing session in background',
-              copy: 'The first brainstorming turn is still running. You can leave this page and come back later.'
+              copy: 'The first brainstorming turn is still running. You can leave this page and come back later.',
+              cancel: session && session.id ? () => runLifecycleAction('cancel') : null
             };
           }
           return {
             phase: 'pending',
             scope: 'processing',
             title: 'Processing answer in background',
-            copy: 'This turn is still running in background. The current question stays frozen until the next real message arrives.'
+            copy: 'This turn is still running in background. The current question stays frozen until the next real message arrives.',
+            cancel: session && session.id ? () => runLifecycleAction('cancel') : null
           };
         }
 
-        if (processing.state === 'failed') {
+        if (processing.state === 'retryable') {
           return {
             phase: 'error',
             scope: 'processing',
-            title: 'Background step failed',
+            title: 'Background step needs attention',
             copy: processing.error && processing.error.message
               ? processing.error.message
-              : 'The background step failed before the next message was ready.'
+              : 'The background step stopped before the next message was ready.',
+            retry: session && session.id ? () => runLifecycleAction('retry') : null,
+            cancel: session && session.id ? () => runLifecycleAction('cancel') : null
+          };
+        }
+
+        if (processing.state === 'cancelled') {
+          return {
+            phase: 'success',
+            scope: 'processing',
+            title: 'Background step cancelled',
+            copy: 'The current visible question or result stayed frozen. You can continue later, resubmit manually, or delete this session.'
           };
         }
 
@@ -1158,11 +1201,13 @@
           const nextSession = await api('GET', `/api/sessions/${sessionId}`);
           const wasRunning = isAnyProcessing(previousSession);
           const isRunningNow = isAnyProcessing(nextSession);
-          const failedNow = getSessionProcessing(nextSession) && getSessionProcessing(nextSession).state === 'failed';
+          const processingNow = getSessionProcessing(nextSession);
+          const needsAttentionNow = processingNow && processingNow.state === 'retryable';
+          const cancelledNow = processingNow && processingNow.state === 'cancelled';
 
           await renderSession(nextSession);
 
-          if (wasRunning && !isRunningNow && !failedNow) {
+          if (wasRunning && !isRunningNow && !needsAttentionNow && !cancelledNow) {
             if (nextSession.currentMessage && nextSession.currentMessage.type === 'question') {
               flashRequestSuccess(
                 'Moved to the next question',
@@ -1205,6 +1250,7 @@
         setCreateControlsDisabled(requestState.phase === 'pending' && requestState.scope === 'create');
         setAnswerControlsDisabled(
           (requestState.phase === 'pending' && requestState.scope === 'submit')
+          || (requestState.phase === 'pending' && requestState.scope === 'lifecycle')
           || isSubmitProcessing(currentSessionSnapshot)
         );
       }
@@ -1219,6 +1265,8 @@
           requestStatusPanelEl.dataset.state = 'idle';
           requestStatusRetryEl.hidden = true;
           requestStatusRetryEl.onclick = null;
+          requestStatusCancelEl.hidden = true;
+          requestStatusCancelEl.onclick = null;
           return;
         }
 
@@ -1239,6 +1287,19 @@
           requestStatusRetryEl.hidden = true;
           requestStatusRetryEl.onclick = null;
         }
+
+        if (effectiveState.cancel) {
+          requestStatusCancelEl.hidden = false;
+          requestStatusCancelEl.onclick = () => {
+            const cancel = effectiveState.cancel;
+            if (typeof cancel === 'function') {
+              cancel();
+            }
+          };
+        } else {
+          requestStatusCancelEl.hidden = true;
+          requestStatusCancelEl.onclick = null;
+        }
       }
 
       function setRequestState(nextState) {
@@ -1251,7 +1312,8 @@
           scope: nextState && nextState.scope ? nextState.scope : null,
           title: nextState && nextState.title ? nextState.title : '',
           copy: nextState && nextState.copy ? nextState.copy : '',
-          retry: nextState && typeof nextState.retry === 'function' ? nextState.retry : null
+          retry: nextState && typeof nextState.retry === 'function' ? nextState.retry : null,
+          cancel: nextState && typeof nextState.cancel === 'function' ? nextState.cancel : null
         };
         renderRequestStatus();
         applyInteractiveState();
@@ -1312,11 +1374,16 @@
             : 'The current answer has been accepted. The graph will advance when the background turn finishes.';
           return;
         }
-        if (processing && processing.state === 'failed') {
-          stageTitleEl.textContent = 'Background step failed';
+        if (processing && processing.state === 'retryable') {
+          stageTitleEl.textContent = 'Background step needs attention';
           stageCopyEl.textContent = processing.error && processing.error.message
             ? processing.error.message
-            : 'The last background step failed before the next message was ready.';
+            : 'The last background step stopped before the next message was ready. Retry or cancel this round.';
+          return;
+        }
+        if (processing && processing.state === 'cancelled') {
+          stageTitleEl.textContent = 'Background step cancelled';
+          stageCopyEl.textContent = 'The current visible question or result was kept as-is. You can continue later or start another topic.';
           return;
         }
         if (!stage) {
@@ -1408,11 +1475,14 @@
             const processing = session.processing && typeof session.processing === 'object'
               ? session.processing
               : null;
-            const secondaryLabel = processing && processing.state === 'running'
-              ? `${processing.action === 'create' ? 'creating' : 'processing'} · ${session.completionMode || 'artifact'}`
-              : (processing && processing.state === 'failed'
-                ? `failed · ${session.completionMode || 'artifact'}`
-                : `${session.workflowStageLabel || session.workflowStage || session.currentMessageType || 'active'} · ${session.completionMode || 'artifact'}`);
+            let secondaryLabel = `${session.workflowStageLabel || session.workflowStage || session.currentMessageType || 'active'} · ${session.completionMode || 'artifact'}`;
+            if (processing && processing.state === 'running') {
+              secondaryLabel = `${processing.action === 'create' ? 'creating' : 'processing'} · ${session.completionMode || 'artifact'}`;
+            } else if (processing && processing.state === 'retryable') {
+              secondaryLabel = `needs attention · ${session.completionMode || 'artifact'}`;
+            } else if (processing && processing.state === 'cancelled') {
+              secondaryLabel = `cancelled · ${session.completionMode || 'artifact'}`;
+            }
             return (
           `<div class="session-item${session.id === window.currentSessionId ? ' active' : ''}" data-session-id="${escapeHtml(session.id)}">` +
             `<div class="session-item-shell">` +
@@ -1519,7 +1589,7 @@
             }
             submitAnswer(window.currentSessionId, answer);
           },
-          async onInspect(nodeId) {
+          async onInspect(nodeId, contextSelection) {
             inspectedCardId = nodeId === inspectedCardId ? null : nodeId;
             try {
               const mainlineRoundId = currentSessionSnapshot
@@ -1533,13 +1603,25 @@
                 ? currentSessionSnapshot.strategyState.selectedBranchRunId
                 : null;
 
-              if (window.currentSessionId && nodeId && nodeId.startsWith('branch-run-')) {
-                const session = await selectBranchContext(window.currentSessionId, nodeId);
+              if (
+                window.currentSessionId
+                && contextSelection
+                && contextSelection.type === 'branch-run'
+                && contextSelection.branchRunId
+              ) {
+                const session = await selectBranchContext(window.currentSessionId, contextSelection.branchRunId);
                 await renderSession(session);
                 return;
               }
 
-              if (window.currentSessionId && selectedBranchRunId && mainlineRoundId && nodeId === mainlineRoundId) {
+              if (
+                window.currentSessionId
+                && selectedBranchRunId
+                && mainlineRoundId
+                && contextSelection
+                && contextSelection.type === 'mainline'
+                && contextSelection.roundId === mainlineRoundId
+              ) {
                 const session = await selectBranchContext(window.currentSessionId, null);
                 await renderSession(session);
                 return;

@@ -329,30 +329,79 @@ function normalizeBranchRun(branchRun, index) {
   const currentMessage = branchRun.currentMessage && typeof branchRun.currentMessage === 'object'
     ? clone(branchRun.currentMessage)
     : null;
+  const sourceOptionLabel = typeof branchRun.sourceOptionLabel === 'string' && branchRun.sourceOptionLabel.trim()
+    ? branchRun.sourceOptionLabel.trim()
+    : title;
   const resultSummary = branchRun.resultSummary && typeof branchRun.resultSummary === 'object'
     ? {
         title: typeof branchRun.resultSummary.title === 'string' ? branchRun.resultSummary.title : title,
         text: typeof branchRun.resultSummary.text === 'string' ? branchRun.resultSummary.text : ''
       }
     : null;
+  const summary = branchRun.summary && typeof branchRun.summary === 'object'
+    ? clone(branchRun.summary)
+    : (currentMessage && currentMessage.type === 'summary' ? clone(currentMessage) : null);
+  const artifact = branchRun.artifact && typeof branchRun.artifact === 'object'
+    ? clone(branchRun.artifact)
+    : (currentMessage && currentMessage.type === 'artifact_ready' ? clone(currentMessage) : null);
+  const anchorQuestion = branchRun.anchorQuestion && typeof branchRun.anchorQuestion === 'object'
+    ? clone(branchRun.anchorQuestion)
+    : null;
+  const anchorHistory = Array.isArray(branchRun.anchorHistory)
+    ? branchRun.anchorHistory
+      .filter((entry) => entry && typeof entry === 'object')
+      .map((entry) => ({
+        questionId: typeof entry.questionId === 'string' ? entry.questionId : null,
+        question: typeof entry.question === 'string' ? entry.question : '',
+        answer: typeof entry.answer === 'string' ? entry.answer : ''
+      }))
+    : [];
 
   return {
     id,
     parentQuestionId: typeof branchRun.parentQuestionId === 'string' && branchRun.parentQuestionId.trim()
       ? branchRun.parentQuestionId.trim()
       : null,
+    parentQuestionNodeId: typeof branchRun.parentQuestionNodeId === 'string' && branchRun.parentQuestionNodeId.trim()
+      ? branchRun.parentQuestionNodeId.trim()
+      : null,
     sourceOptionId,
+    sourceOptionLabel,
     title,
     description: typeof branchRun.description === 'string' ? branchRun.description : '',
     status: typeof branchRun.status === 'string' && branchRun.status.trim()
       ? branchRun.status.trim()
-      : (resultSummary ? 'complete' : 'paused'),
+      : ((summary || artifact || resultSummary) ? 'complete' : 'paused'),
+    backendMode: typeof branchRun.backendMode === 'string' && branchRun.backendMode.trim()
+      ? branchRun.backendMode.trim()
+      : null,
+    providerSession: branchRun.providerSession && typeof branchRun.providerSession === 'object'
+      ? clone(branchRun.providerSession)
+      : null,
+    strategyState: normalizeStrategyState({
+      ...(branchRun.strategyState && typeof branchRun.strategyState === 'object'
+        ? branchRun.strategyState
+        : {}),
+      branchRuns: [],
+      selectedBranchRunId: null
+    }),
     currentQuestionId: typeof branchRun.currentQuestionId === 'string' && branchRun.currentQuestionId.trim()
       ? branchRun.currentQuestionId.trim()
       : (currentMessage && currentMessage.type === 'question' ? currentMessage.questionId : null),
     currentMessage,
     history,
     resultSummary,
+    summary,
+    artifact,
+    anchorQuestion,
+    anchorHistory,
+    anchorStrategyState: normalizeStrategyState({
+      ...(branchRun.anchorStrategyState && typeof branchRun.anchorStrategyState === 'object'
+        ? branchRun.anchorStrategyState
+        : {}),
+      branchRuns: [],
+      selectedBranchRunId: null
+    }),
     createdAt: typeof branchRun.createdAt === 'string' ? branchRun.createdAt : null,
     updatedAt: typeof branchRun.updatedAt === 'string' ? branchRun.updatedAt : null
   };

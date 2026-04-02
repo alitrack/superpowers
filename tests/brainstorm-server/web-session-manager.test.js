@@ -370,8 +370,8 @@ async function runTests() {
     await waitForSession(manager, ready.id, (current) => current.processing.state === 'idle');
   });
 
-  await test('backgroundProcessing re-enqueues a running submit job after manager restart', async (tmpDir) => {
-    const initialRuntimeAdapter = {
+  await test('backgroundProcessing marks stale running submit jobs as retryable instead of silently re-enqueueing them', async (tmpDir) => {
+    const runtimeAdapter = {
       async createSession(input) {
         return {
           sessionId: input.sessionId,
@@ -397,8 +397,9 @@ async function runTests() {
 
     const firstManager = createSessionManager({
       dataDir: tmpDir,
-      runtimeAdapter: initialRuntimeAdapter,
-      backgroundProcessing: true
+      runtimeAdapter,
+      backgroundProcessing: true,
+      processingLeaseTimeoutMs: 50
     });
     const provisional = await firstManager.createSession({ completionMode: 'summary' });
     const ready = await waitForSession(firstManager, provisional.id, (current) => (
@@ -414,44 +415,27 @@ async function runTests() {
       rawInput: 'Recover after restart'
     });
 
-    const resumedRuntimeAdapter = {
-      async createSession() {
-        throw new Error('createSession should not be called during submit recovery');
-      },
-      async submitAnswer(snapshot, answer) {
-        return {
-          ...snapshot,
-          history: [{ questionId: 'topic', question: 'What do you want to brainstorm about?', answer: answer.text }],
-          currentQuestionId: null,
-          currentMessage: {
-            type: 'summary',
-            title: 'Recovered session',
-            text: 'Recovered after manager restart.',
-            answers: [{ questionId: 'topic', answer: answer.text }]
-          }
-        };
-      }
-    };
+    const sessionPath = path.join(tmpDir, 'sessions', `${ready.id}.json`);
+    const stored = JSON.parse(fs.readFileSync(sessionPath, 'utf-8'));
+    stored.processing.heartbeatAt = '2000-01-01T00:00:00.000Z';
+    stored.processing.startedAt = '2000-01-01T00:00:00.000Z';
+    stored.processing.updatedAt = '2000-01-01T00:00:00.000Z';
+    stored.processing.leaseOwnerId = 'dead-runner';
+    fs.writeFileSync(sessionPath, JSON.stringify(stored, null, 2) + '\n');
 
     const reloadedManager = createSessionManager({
       dataDir: tmpDir,
-      runtimeAdapter: resumedRuntimeAdapter,
-      backgroundProcessing: true
+      runtimeAdapter,
+      backgroundProcessing: true,
+      processingLeaseTimeoutMs: 50
     });
 
-    const running = reloadedManager.getSession(ready.id);
-    assert.strictEqual(running.processing.state, 'running');
-
-    const completed = await waitForSession(reloadedManager, ready.id, (current) => (
-      current.processing.state === 'idle'
-      && current.currentMessage
-      && current.currentMessage.type === 'summary'
-    ));
-    assert.strictEqual(completed.currentMessage.title, 'Recovered session');
-    assert.strictEqual(completed.history.length, 1);
+    const retryable = reloadedManager.getSession(ready.id);
+    assert.strictEqual(retryable.processing.state, 'retryable');
+    assert.strictEqual(retryable.currentMessage.questionId, 'topic');
   });
 
-  await test('backgroundProcessing persists submit failures without discarding the current question', async (tmpDir) => {
+  await test('backgroundProcessing persists submit failures as retryable without discarding the current question', async (tmpDir) => {
     const runtimeAdapter = {
       async createSession(input) {
         return {
@@ -499,11 +483,162 @@ async function runTests() {
     });
 
     const failed = await waitForSession(manager, ready.id, (current) => (
-      current.processing.state === 'failed'
+      current.processing.state === 'retryable'
     ));
     assert.strictEqual(failed.currentMessage.questionId, 'topic');
     assert.strictEqual(failed.processing.error.code, 'RUNTIME_TIMEOUT');
     assert(/timed out/.test(failed.processing.error.message));
+  });
+
+  await test('retry requeues a retryable submit job from pending input and last stable snapshot', async (tmpDir) => {
+    let submitCallCount = 0;
+    const runtimeAdapter = {
+      async createSession(input) {
+        return {
+          sessionId: input.sessionId,
+          backendMode: 'exec',
+          providerSession: { transcriptId: `transcript-${input.sessionId}` },
+          currentQuestionId: 'topic',
+          history: [],
+          currentMessage: {
+            type: 'question',
+            questionType: 'ask_text',
+            questionId: 'topic',
+            title: 'What do you want to brainstorm about?',
+            description: 'Start with the core topic.',
+            options: [],
+            allowTextOverride: true
+          }
+        };
+      },
+      async submitAnswer(snapshot, answer) {
+        submitCallCount += 1;
+        if (submitCallCount === 1) {
+          const error = new Error('runtime submitAnswer timed out after 12345ms');
+          error.code = 'RUNTIME_TIMEOUT';
+          throw error;
+        }
+        return {
+          ...snapshot,
+          history: [{ questionId: 'topic', question: 'What do you want to brainstorm about?', answer: answer.text }],
+          currentQuestionId: null,
+          currentMessage: {
+            type: 'summary',
+            title: 'Retried session',
+            text: 'Recovered through retry.',
+            answers: [{ questionId: 'topic', answer: answer.text }]
+          }
+        };
+      }
+    };
+
+    const manager = createSessionManager({
+      dataDir: tmpDir,
+      runtimeAdapter,
+      backgroundProcessing: true
+    });
+
+    const provisional = await manager.createSession({ completionMode: 'summary' });
+    const ready = await waitForSession(manager, provisional.id, (current) => (
+      current.currentMessage && current.currentMessage.questionId === 'topic'
+    ));
+
+    await manager.submitAnswer(ready.id, {
+      type: 'answer',
+      questionId: 'topic',
+      answerMode: 'text',
+      optionIds: [],
+      text: 'Retry this turn',
+      rawInput: 'Retry this turn'
+    });
+
+    const retryable = await waitForSession(manager, ready.id, (current) => (
+      current.processing.state === 'retryable'
+    ));
+    assert.strictEqual(retryable.currentMessage.questionId, 'topic');
+
+    const retried = manager.runSessionLifecycleAction(ready.id, 'retry');
+    assert.strictEqual(retried.processing.state, 'running');
+    assert.strictEqual(retried.processing.action, 'submit');
+
+    const completed = await waitForSession(manager, ready.id, (current) => (
+      current.processing.state === 'idle'
+      && current.currentMessage
+      && current.currentMessage.type === 'summary'
+    ));
+    assert.strictEqual(completed.currentMessage.title, 'Retried session');
+    assert.strictEqual(completed.history.length, 1);
+  });
+
+  await test('cancel supersedes a running submit job and ignores its late result', async (tmpDir) => {
+    let releaseSubmit = null;
+    const runtimeAdapter = {
+      async createSession(input) {
+        return {
+          sessionId: input.sessionId,
+          backendMode: 'exec',
+          providerSession: { transcriptId: `transcript-${input.sessionId}` },
+          currentQuestionId: 'topic',
+          history: [],
+          currentMessage: {
+            type: 'question',
+            questionType: 'ask_text',
+            questionId: 'topic',
+            title: 'What do you want to brainstorm about?',
+            description: 'Start with the core topic.',
+            options: [],
+            allowTextOverride: true
+          }
+        };
+      },
+      submitAnswer(snapshot, answer) {
+        return new Promise((resolve) => {
+          releaseSubmit = () => resolve({
+            ...snapshot,
+            history: [{ questionId: 'topic', question: 'What do you want to brainstorm about?', answer: answer.text }],
+            currentQuestionId: null,
+            currentMessage: {
+              type: 'summary',
+              title: 'Late summary',
+              text: 'This should be ignored after cancel.',
+              answers: [{ questionId: 'topic', answer: answer.text }]
+            }
+          });
+        });
+      }
+    };
+
+    const manager = createSessionManager({
+      dataDir: tmpDir,
+      runtimeAdapter,
+      backgroundProcessing: true
+    });
+
+    const provisional = await manager.createSession({ completionMode: 'summary' });
+    const ready = await waitForSession(manager, provisional.id, (current) => (
+      current.currentMessage && current.currentMessage.questionId === 'topic'
+    ));
+
+    await manager.submitAnswer(ready.id, {
+      type: 'answer',
+      questionId: 'topic',
+      answerMode: 'text',
+      optionIds: [],
+      text: 'Cancel this turn',
+      rawInput: 'Cancel this turn'
+    });
+
+    const cancelled = manager.runSessionLifecycleAction(ready.id, 'cancel');
+    assert.strictEqual(cancelled.processing.state, 'cancelled');
+    assert.strictEqual(cancelled.currentMessage.questionId, 'topic');
+
+    await waitForCondition(() => typeof releaseSubmit === 'function');
+    releaseSubmit();
+    await sleep(50);
+
+    const current = manager.getSession(ready.id);
+    assert.strictEqual(current.processing.state, 'cancelled');
+    assert.strictEqual(current.currentMessage.questionId, 'topic');
   });
 
   await test('deletes a persisted session and removes it from the session list', async (tmpDir) => {
@@ -697,7 +832,7 @@ async function runTests() {
     assert.strictEqual(reloaded.nodeLog.activeNodeId, 'question-seed-reframe');
   });
 
-  await test('materializes branch runs explicitly and routes answers through the selected branch context', async (tmpDir) => {
+  await test('materializes real branch sessions explicitly and routes answers through the selected branch context', async (tmpDir) => {
     const runtimeAdapter = {
       async createSession(input) {
         return {
@@ -742,6 +877,65 @@ async function runTests() {
         };
       },
       async submitAnswer(snapshot, answer) {
+        if (String(snapshot.sessionId || '').startsWith('branch-run-')) {
+          if (snapshot.currentMessage && snapshot.currentMessage.questionId === 'seed-directions') {
+            const selectedId = Array.isArray(answer.optionIds) && answer.optionIds.length > 0
+              ? answer.optionIds[0]
+              : 'branch-option';
+            const selectedLabel = selectedId === 'facilitation-engine'
+              ? 'Dynamic facilitation engine'
+              : 'Interaction model redesign';
+            return {
+              ...snapshot,
+              backendMode: 'app-server',
+              providerSession: {
+                threadId: `thread-${snapshot.sessionId}`,
+                pendingRequestId: null
+              },
+              history: (snapshot.history || []).concat([{
+                questionId: 'seed-directions',
+                question: 'Which directions are worth exploring as serious paths?',
+                answer: selectedLabel
+              }]),
+              currentQuestionId: `${selectedId}-branch-criterion`,
+              currentMessage: {
+                type: 'question',
+                questionType: 'pick_one',
+                questionId: `${selectedId}-branch-criterion`,
+                title: `Which proof point should validate "${selectedLabel}" first?`,
+                description: 'Choose the first concrete proof point for this branch.',
+                options: [
+                  { id: 'clarity', label: 'User clarity', description: '' },
+                  { id: 'speed', label: 'Execution speed', description: '' }
+                ],
+                allowTextOverride: true
+              }
+            };
+          }
+
+          return {
+            ...snapshot,
+            backendMode: 'app-server',
+            providerSession: {
+              threadId: `thread-${snapshot.sessionId}`,
+              pendingRequestId: null
+            },
+            history: (snapshot.history || []).concat([{
+              questionId: snapshot.currentMessage.questionId,
+              question: snapshot.currentMessage.title,
+              answer: Array.isArray(answer.optionIds) && answer.optionIds.length > 0
+                ? answer.optionIds.join(', ')
+                : answer.text
+            }]),
+            currentQuestionId: null,
+            currentMessage: {
+              type: 'summary',
+              title: 'Branch summary',
+              text: `Branch resolved with ${Array.isArray(answer.optionIds) ? answer.optionIds.join(', ') : answer.text}`
+            }
+          };
+        }
+
         return {
           ...snapshot,
           history: [
@@ -794,46 +988,48 @@ async function runTests() {
     assert.strictEqual(materialized.currentMessage.questionId, 'seed-criterion');
     assert.strictEqual(materialized.strategyState.branchRuns.length, 2);
     assert.strictEqual(materialized.strategyState.selectedBranchRunId, null);
-    assert.strictEqual(materialized.strategyState.branchRuns[0].currentMessage.questionType, 'ask_text');
+    assert.strictEqual(materialized.strategyState.branchRuns[0].backendMode, 'app-server');
+    assert.strictEqual(materialized.strategyState.branchRuns[0].currentMessage.questionType, 'pick_one');
+    assert(materialized.strategyState.branchRuns[0].providerSession);
     assert(materialized.roundGraph, 'expected round graph to persist on session');
     assert(materialized.nodeLog, 'expected immutable node log');
     assert.strictEqual(materialized.roundGraph.activeRoundId, 'round-seed-criterion');
     assert(materialized.roundGraph.rounds.some((round) => round.id === 'round-seed-directions'));
     assert(materialized.roundGraph.rounds.some((round) => round.id === 'round-seed-criterion'));
-    assert(materialized.roundGraph.rounds.some((round) => round.id === 'branch-run-seed-directions-facilitation-engine'));
+    assert(materialized.roundGraph.rounds.some((round) => round.id === 'branch-run-question-seed-directions-facilitation-engine'));
     assert(materialized.nodeLog.nodes.some((node) => node.id === 'question-seed-directions'));
     assert(materialized.nodeLog.nodes.some((node) => node.id === 'question-seed-criterion'));
-    assert(materialized.nodeLog.nodes.some((node) => node.id === 'question-branch-run-seed-directions-facilitation-engine-detail'));
-    assert(materialized.nodeLog.nodes.some((node) => node.id === 'question-branch-run-seed-directions-interaction-redesign-detail'));
+    assert(materialized.nodeLog.nodes.some((node) => node.questionId === 'facilitation-engine-branch-criterion'));
+    assert(materialized.nodeLog.nodes.some((node) => node.questionId === 'interaction-redesign-branch-criterion'));
     const sourceQuestionNode = materialized.nodeLog.nodes.find((node) => node.id === 'question-seed-directions');
     assert.strictEqual(sourceQuestionNode.title, 'Which directions are worth exploring as serious paths?');
 
-    const switched = manager.selectSessionBranchContext(session.id, 'branch-run-seed-directions-interaction-redesign');
-    assert.strictEqual(switched.strategyState.selectedBranchRunId, 'branch-run-seed-directions-interaction-redesign');
-    assert.strictEqual(switched.roundGraph.activeRoundId, 'branch-run-seed-directions-interaction-redesign');
-    assert.strictEqual(switched.nodeLog.activeNodeId, 'question-branch-run-seed-directions-interaction-redesign-detail');
+    const switched = manager.selectSessionBranchContext(session.id, 'branch-run-question-seed-directions-interaction-redesign');
+    assert.strictEqual(switched.strategyState.selectedBranchRunId, 'branch-run-question-seed-directions-interaction-redesign');
+    assert.strictEqual(switched.roundGraph.activeRoundId, 'branch-run-question-seed-directions-interaction-redesign');
+    assert.strictEqual(switched.nodeLog.activeNodeId, 'question-interaction-redesign-branch-criterion');
 
     const reloadedManager = createSessionManager({ dataDir: tmpDir, runtimeAdapter });
     const reloaded = reloadedManager.getSession(session.id);
-    assert.strictEqual(reloaded.strategyState.selectedBranchRunId, 'branch-run-seed-directions-interaction-redesign');
-    assert.strictEqual(reloaded.roundGraph.activeRoundId, 'branch-run-seed-directions-interaction-redesign');
-    assert.strictEqual(reloaded.nodeLog.activeNodeId, 'question-branch-run-seed-directions-interaction-redesign-detail');
+    assert.strictEqual(reloaded.strategyState.selectedBranchRunId, 'branch-run-question-seed-directions-interaction-redesign');
+    assert.strictEqual(reloaded.roundGraph.activeRoundId, 'branch-run-question-seed-directions-interaction-redesign');
+    assert.strictEqual(reloaded.nodeLog.activeNodeId, 'question-interaction-redesign-branch-criterion');
 
     const branched = await manager.submitAnswer(session.id, {
       type: 'answer',
-      questionId: 'branch-run-seed-directions-interaction-redesign-detail',
-      answerMode: 'text',
-      optionIds: [],
-      text: 'Turn this branch into a concrete interaction lane with visible facilitator moves.',
-      rawInput: 'Turn this branch into a concrete interaction lane with visible facilitator moves.'
+      questionId: 'interaction-redesign-branch-criterion',
+      answerMode: 'option',
+      optionIds: ['clarity'],
+      text: null,
+      rawInput: 'clarity'
     });
 
-    const completedBranch = branched.strategyState.branchRuns.find((branchRun) => branchRun.id === 'branch-run-seed-directions-interaction-redesign');
-    const untouchedBranch = branched.strategyState.branchRuns.find((branchRun) => branchRun.id === 'branch-run-seed-directions-facilitation-engine');
+    const completedBranch = branched.strategyState.branchRuns.find((branchRun) => branchRun.id === 'branch-run-question-seed-directions-interaction-redesign');
+    const untouchedBranch = branched.strategyState.branchRuns.find((branchRun) => branchRun.id === 'branch-run-question-seed-directions-facilitation-engine');
     assert(completedBranch, 'expected completed branch run');
     assert.strictEqual(completedBranch.status, 'complete');
-    assert.strictEqual(completedBranch.history.length, 1);
-    assert(completedBranch.resultSummary.text.includes('interaction lane'));
+    assert.strictEqual(completedBranch.history.length, 2);
+    assert(completedBranch.resultSummary.text.includes('clarity'));
     assert(untouchedBranch, 'expected sibling branch run');
     assert.notStrictEqual(untouchedBranch.status, 'complete');
     assert.strictEqual(branched.currentMessage.questionId, 'seed-criterion');
@@ -842,6 +1038,140 @@ async function runTests() {
     assert.strictEqual(returned.strategyState.selectedBranchRunId, null);
     assert.strictEqual(returned.roundGraph.activeRoundId, 'round-seed-criterion');
     assert.strictEqual(returned.nodeLog.activeNodeId, 'question-seed-criterion');
+  });
+
+  await test('starts a real branch from a frozen historical question node without mutating the original node', async (tmpDir) => {
+    const runtimeAdapter = {
+      async createSession(input) {
+        return {
+          sessionId: input.sessionId,
+          backendMode: 'exec',
+          providerSession: { transcriptId: `transcript-${input.sessionId}` },
+          strategyState: {
+            phase: 'reframe',
+            nextLearningGoal: 'select-the-best-problem-frame'
+          },
+          currentQuestionId: 'question',
+          history: [],
+          currentMessage: {
+            type: 'question',
+            questionType: 'pick_one',
+            questionId: 'question',
+            title: '第一题',
+            description: '',
+            options: [
+              { id: 'A', label: 'A 方向', description: '' },
+              { id: 'B', label: 'B 方向', description: '' }
+            ],
+            allowTextOverride: true
+          }
+        };
+      },
+      async submitAnswer(snapshot, answer) {
+        if (String(snapshot.sessionId || '').startsWith('branch-run-')) {
+          return {
+            ...snapshot,
+            backendMode: 'exec',
+            providerSession: {
+              transcriptId: `transcript-${snapshot.sessionId}`
+            },
+            history: (snapshot.history || []).concat([{
+              questionId: snapshot.currentMessage.questionId,
+              question: snapshot.currentMessage.title,
+              answer: Array.isArray(answer.optionIds) && answer.optionIds.length > 0
+                ? answer.optionIds.join(', ')
+                : answer.text
+            }]),
+            currentQuestionId: 'branch-follow-up',
+            currentMessage: {
+              type: 'question',
+              questionType: 'pick_one',
+              questionId: 'branch-follow-up',
+              title: '分支追问',
+              description: '围绕历史分支继续追问。',
+              options: [
+                { id: 'detail', label: '展开细节', description: '' }
+              ],
+              allowTextOverride: true
+            }
+          };
+        }
+
+        return {
+          ...snapshot,
+          backendMode: 'exec',
+          providerSession: { transcriptId: `transcript-${snapshot.sessionId}` },
+          history: [{
+            questionId: 'question',
+            question: '第一题',
+            answer: Array.isArray(answer.optionIds) && answer.optionIds.length > 0
+              ? answer.optionIds[0]
+              : answer.text
+          }],
+          currentQuestionId: 'question',
+          currentMessage: {
+            type: 'question',
+            questionType: 'pick_one',
+            questionId: 'question',
+            title: '第二题',
+            description: '',
+            options: [
+              { id: 'A', label: '继续主线 A', description: '' },
+              { id: 'B', label: '继续主线 B', description: '' }
+            ],
+            allowTextOverride: true
+          }
+        };
+      }
+    };
+
+    const manager = createSessionManager({ dataDir: tmpDir, runtimeAdapter });
+    const session = await manager.createSession({
+      completionMode: 'summary',
+      initialPrompt: '验证历史节点分支'
+    });
+    const advanced = await manager.submitAnswer(session.id, {
+      type: 'answer',
+      questionId: 'question',
+      answerMode: 'option',
+      optionIds: ['A'],
+      text: null,
+      rawInput: 'A'
+    });
+
+    const firstRound = advanced.roundGraph.rounds.find((round) => round.id === 'round-question');
+    assert(firstRound, 'expected first frozen round');
+    assert.strictEqual(firstRound.title, '第一题');
+
+    const branched = await manager.submitAnswer(session.id, {
+      type: 'answer',
+      questionId: 'question',
+      answerMode: 'option',
+      optionIds: ['B'],
+      text: null,
+      rawInput: 'B',
+      contextSelection: {
+        type: 'mainline',
+        roundId: 'round-question',
+        nodeId: 'question-question'
+      }
+    });
+
+    assert.strictEqual(branched.currentMessage.questionId, 'question');
+    assert.strictEqual(branched.currentMessage.title, '第二题');
+    assert.strictEqual(branched.strategyState.selectedBranchRunId, 'branch-run-question-question-B');
+    const branch = branched.strategyState.branchRuns.find((entry) => entry.id === 'branch-run-question-question-B');
+    assert(branch, 'expected historical branch run');
+    assert.strictEqual(branch.parentQuestionNodeId, 'question-question');
+    assert.strictEqual(branch.parentQuestionId, 'question');
+    assert.strictEqual(branch.currentMessage.questionId, 'branch-follow-up');
+    assert.strictEqual(branch.currentMessage.title, '分支追问');
+    assert(branch.providerSession);
+
+    const frozenFirstNode = branched.nodeLog.nodes.find((node) => node.id === 'question-question');
+    assert(frozenFirstNode, 'expected first frozen question node');
+    assert.strictEqual(frozenFirstNode.title, '第一题');
+    assert.strictEqual(frozenFirstNode.messageSnapshot.title, '第一题');
   });
 
   await test('creates a real artifact for artifact-mode sessions', async (tmpDir) => {

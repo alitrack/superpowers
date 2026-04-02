@@ -122,6 +122,7 @@ async function runTests() {
       assert(res.body.includes('request-status-panel'));
       assert(res.body.includes('request-status-copy'));
       assert(res.body.includes('request-status-retry'));
+      assert(res.body.includes('request-status-cancel'));
       assert(res.body.includes('history-toggle-button'));
       assert(res.body.includes('Decision Graph'));
       assert(res.body.includes('Start Another Topic'));
@@ -137,6 +138,7 @@ async function runTests() {
       assert(res.body.includes('Moved to the next question'));
       assert(res.body.includes('The graph advanced to the next question and refocused the active node.'));
       assert(res.body.includes('Try again'));
+      assert(res.body.includes('Cancel'));
       assert(res.body.includes('Open Full History'));
       assert(res.body.includes('Confirm Delete'));
       assert(!res.body.includes('window.confirm('));
@@ -159,6 +161,30 @@ async function runTests() {
       assert(!res.body.includes('V1 Governance Lens'));
       assert(!res.body.includes('Research Assets'));
       assert(!res.body.includes('Publish Review'));
+    });
+
+    await test('serves the rebuilt graph bundle in top-down tree mode', async () => {
+      const bundlePath = path.join(__dirname, '../../skills/brainstorming/scripts/web-graph-client.bundle.js');
+      const bundle = fs.readFileSync(bundlePath, 'utf-8');
+      assert(bundle.includes('rankdir: "TB"') || bundle.includes("rankdir: 'TB'"));
+    });
+
+    await test('bundle preserves manual node positions and lets readonly branch nodes switch context from interactive content', async () => {
+      const bundlePath = path.join(__dirname, '../../skills/brainstorming/scripts/web-graph-client.bundle.js');
+      const bundle = fs.readFileSync(bundlePath, 'utf-8');
+      assert(bundle.includes('manualPositionsRef'), 'expected graph client to preserve manual node positions across rerenders');
+      assert(bundle.includes('if (data.readOnly)'), 'expected readonly graph nodes to branch on readonly click handling');
+      assert(bundle.includes('data.onInspect();'), 'expected readonly interactive content to forward clicks into branch inspection');
+    });
+
+    await test('bundle disables graph keyboard shortcuts that can interfere with IME text entry', async () => {
+      const bundlePath = path.join(__dirname, '../../skills/brainstorming/scripts/web-graph-client.bundle.js');
+      const bundle = fs.readFileSync(bundlePath, 'utf-8');
+      assert(bundle.includes('deleteKeyCode: null'), 'expected graph keyboard delete shortcut to be disabled');
+      assert(bundle.includes('selectionKeyCode: null'), 'expected graph keyboard selection shortcut to be disabled');
+      assert(bundle.includes('panActivationKeyCode: null'), 'expected graph keyboard pan shortcut to be disabled');
+      assert(bundle.includes('zoomActivationKeyCode: null'), 'expected graph keyboard zoom shortcut to be disabled');
+      assert(bundle.includes('disableKeyboardA11y: true'), 'expected graph keyboard a11y handlers to be disabled for IME safety');
     });
 
     await test('does not auto-create an empty session on fresh load', async () => {
@@ -348,12 +374,12 @@ async function runTests() {
       assert(afterMaterialize.roundGraph.rounds.some((round) => round.id === 'round-seed-directions'));
       assert(afterMaterialize.roundGraph.rounds.some((round) => round.id === 'round-seed-criterion'));
       assert(afterMaterialize.roundGraph.rounds.some((round) => (
-        round.id === 'branch-run-seed-directions-facilitation-engine'
-        && /strongest concrete version/i.test(round.title)
+        round.id === 'branch-run-question-seed-directions-facilitation-engine'
+        && round.questionId === 'seed-criterion'
       )));
 
       const siblingBranch = afterMaterialize.strategyState.branchRuns.find((branchRun) => (
-        branchRun.id === 'branch-run-seed-directions-interaction-redesign'
+        branchRun.id === 'branch-run-question-seed-directions-interaction-redesign'
       ));
       assert(siblingBranch);
       assert.strictEqual(siblingBranch.status, 'paused');
@@ -368,21 +394,22 @@ async function runTests() {
       assert(activeBranch);
       assert(activeBranch.currentMessage);
       assert.strictEqual(activeBranch.status, 'active');
+      assert.strictEqual(activeBranch.currentMessage.questionId, 'seed-criterion');
 
       await request('POST', `/api/sessions/${session.id}/answers`, {
         type: 'answer',
         questionId: activeBranch.currentMessage.questionId,
-        answerMode: 'text',
-        optionIds: [],
-        text: 'Turn this branch into a facilitation engine with visible branch semantics and strong canvas feedback.',
-        rawInput: 'Turn this branch into a facilitation engine with visible branch semantics and strong canvas feedback.'
+        answerMode: 'option',
+        optionIds: ['clarity'],
+        text: null,
+        rawInput: 'clarity'
       });
       const continuedBranch = await waitForSession(session.id, (current) => {
         const branchRuns = current.strategyState && Array.isArray(current.strategyState.branchRuns)
           ? current.strategyState.branchRuns
           : [];
         const branch = branchRuns.find((branchRun) => branchRun.id === siblingBranch.id);
-        return branch && branch.status === 'complete';
+        return branch && branch.currentMessage && branch.currentMessage.questionId === 'seed-path';
       });
 
       const completedBranch = continuedBranch.strategyState.branchRuns.find((branchRun) => branchRun.id === siblingBranch.id);
@@ -391,8 +418,8 @@ async function runTests() {
       ));
 
       assert(completedBranch);
-      assert.strictEqual(completedBranch.status, 'complete');
-      assert(completedBranch.resultSummary);
+      assert.strictEqual(completedBranch.status, 'active');
+      assert.strictEqual(completedBranch.currentMessage.questionId, 'seed-path');
       assert(preservedSibling);
       assert.strictEqual(preservedSibling.sourceOptionId, 'facilitation-engine');
       assert(preservedSibling.currentMessage);
@@ -454,6 +481,59 @@ async function runTests() {
       });
 
       assert.strictEqual(res.status, 404);
+    });
+
+    await test('marks stale sessions retryable and supports lifecycle retry through the API', async () => {
+      const created = JSON.parse((await request('POST', '/api/sessions', {
+        completionMode: 'summary',
+        initialPrompt: 'Lifecycle retry flow'
+      })).body);
+      const session = await waitForSession(created.id, (current) => (
+        current.currentMessage && current.currentMessage.questionId === 'seed-reframe'
+      ));
+
+      const sessionPath = path.join(TEST_DIR, '.web-product', 'sessions', `${session.id}.json`);
+      const stored = JSON.parse(fs.readFileSync(sessionPath, 'utf-8'));
+      stored.processing = {
+        state: 'retryable',
+        action: 'submit',
+        jobId: 'retryable-job',
+        queuedAt: '2000-01-01T00:00:00.000Z',
+        startedAt: '2000-01-01T00:00:00.000Z',
+        heartbeatAt: '2000-01-01T00:00:00.000Z',
+        updatedAt: '2000-01-01T00:00:00.000Z',
+        finishedAt: '2000-01-01T00:00:00.000Z',
+        attemptCount: 1,
+        leaseOwnerId: 'dead-runner',
+        supersededByJobId: null,
+        pendingInput: {
+          type: 'answer',
+          questionId: 'seed-reframe',
+          answerMode: 'option',
+          optionIds: ['fix-facilitation'],
+          text: null,
+          rawInput: '2'
+        },
+        error: {
+          code: 'RUNTIME_TIMEOUT',
+          message: 'Background step timed out'
+        }
+      };
+      fs.writeFileSync(sessionPath, JSON.stringify(stored, null, 2) + '\n');
+
+      const retryRes = await request('POST', `/api/sessions/${session.id}/lifecycle`, {
+        action: 'retry'
+      });
+      assert.strictEqual(retryRes.status, 200);
+      const retried = JSON.parse(retryRes.body);
+      assert.strictEqual(retried.processing.state, 'running');
+
+      const completed = await waitForSession(session.id, (current) => (
+        current.processing.state === 'idle'
+        && current.currentMessage
+        && current.currentMessage.questionId === 'seed-directions'
+      ));
+      assert.strictEqual(completed.currentMessage.questionId, 'seed-directions');
     });
 
     await test('returns summary-complete sessions when completionMode=summary', async () => {

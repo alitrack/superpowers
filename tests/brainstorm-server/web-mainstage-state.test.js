@@ -450,7 +450,13 @@ test('keeps a submitted historical question round as a frozen question snapshot 
   assert(historicalGraphNode, 'expected historical graph node');
   assert(historicalGraphNode.data.message, 'historical graph node should still render question message');
   assert.strictEqual(historicalGraphNode.data.message.title, '选择本轮测试的核心问题框架');
-  assert.strictEqual(historicalGraphNode.data.readOnly, true);
+  assert.strictEqual(historicalGraphNode.data.readOnly, false);
+  assert.deepStrictEqual(historicalGraphNode.data.contextSelection, {
+    type: 'mainline',
+    questionId: 'question',
+    roundId: 'round-question',
+    nodeId: null
+  });
   assert.strictEqual(view.canvasWorkspace.graphWorkspace.focusNodeId, 'round-question-2');
 });
 
@@ -537,7 +543,7 @@ test('does not re-identify historical rounds from current mutable questionId whe
   )));
 });
 
-test('caps recent context at three steps by default but reveals the full history on demand', () => {
+test('caps recent context at three steps by default while keeping the full mainline trunk visible on the tree', () => {
   const session = {
     id: 'session-history',
     history: buildHistory(5),
@@ -571,12 +577,13 @@ test('caps recent context at three steps by default but reveals the full history
   assert.strictEqual(expanded.canvasWorkspace.mode, 'overview');
   assert.strictEqual(collapsed.canvasWorkspace.treeCanvas.hiddenCount, 2);
   assert.strictEqual(expanded.canvasWorkspace.treeCanvas.hiddenCount, 0);
-  assert(expanded.canvasWorkspace.treeCanvas.parentPath.length > collapsed.canvasWorkspace.treeCanvas.parentPath.length);
+  assert.strictEqual(collapsed.canvasWorkspace.treeCanvas.parentPath.length, 5);
+  assert.strictEqual(expanded.canvasWorkspace.treeCanvas.parentPath.length, 5);
   assert(collapsed.canvasWorkspace.graphWorkspace.edges.some((edge) => (
-    edge.source === 'topic-root' && edge.target === 'round-q-3'
+    edge.source === 'topic-root' && edge.target === 'round-q-1'
   )));
   assert(collapsed.canvasWorkspace.graphWorkspace.edges.some((edge) => (
-    edge.source === 'round-q-3' && edge.target === 'round-q-4'
+    edge.source === 'round-q-4' && edge.target === 'round-q-5'
   )));
 });
 

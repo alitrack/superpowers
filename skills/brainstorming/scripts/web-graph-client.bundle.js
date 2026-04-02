@@ -41229,9 +41229,9 @@ var BrainstormGraphClient = (() => {
     const graph = new import_dagre.default.graphlib.Graph();
     graph.setDefaultEdgeLabel(() => ({}));
     graph.setGraph({
-      rankdir: "LR",
-      nodesep: 34,
-      ranksep: 74,
+      rankdir: "TB",
+      nodesep: 42,
+      ranksep: 96,
       marginx: 24,
       marginy: 24
     });
@@ -41276,12 +41276,12 @@ var BrainstormGraphClient = (() => {
       data.onInspect();
     }
     return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className, onClick: handleInspect, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Handle, { type: "target", position: Position.Left, isConnectable: false }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Handle, { type: "target", position: Position.Top, isConnectable: false }),
       /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "brainstorm-flow-node__badge", children: data.badge }),
       /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("h3", { className: "brainstorm-flow-node__title", children: data.title }),
       data.body ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { className: "brainstorm-flow-node__body", children: data.body }) : null,
       children2,
-      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Handle, { type: "source", position: Position.Right, isConnectable: false })
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Handle, { type: "source", position: Position.Bottom, isConnectable: false })
     ] });
   }
   function TopicNode(props) {
@@ -41296,6 +41296,15 @@ var BrainstormGraphClient = (() => {
   function DecisionNode({ data, selected: selected2 }) {
     const hostRef = (0, import_react3.useRef)(null);
     function stopInteractivePropagation(event) {
+      if (data.readOnly) {
+        if (event && typeof event.preventDefault === "function") {
+          event.preventDefault();
+        }
+        if (data && typeof data.onInspect === "function") {
+          data.onInspect();
+        }
+        return;
+      }
       event.stopPropagation();
     }
     (0, import_react3.useEffect)(() => {
@@ -41308,7 +41317,10 @@ var BrainstormGraphClient = (() => {
         compact: Boolean(data.compact),
         onAnswer(answer) {
           if (typeof data.onAnswer === "function") {
-            data.onAnswer(answer);
+            data.onAnswer({
+              ...answer,
+              contextSelection: data.contextSelection || null
+            });
           }
         }
       });
@@ -41365,6 +41377,15 @@ var BrainstormGraphClient = (() => {
   function BranchRunNode({ data, selected: selected2 }) {
     const hostRef = (0, import_react3.useRef)(null);
     function stopInteractivePropagation(event) {
+      if (data.readOnly) {
+        if (event && typeof event.preventDefault === "function") {
+          event.preventDefault();
+        }
+        if (data && typeof data.onInspect === "function") {
+          data.onInspect();
+        }
+        return;
+      }
       event.stopPropagation();
     }
     (0, import_react3.useEffect)(() => {
@@ -41377,7 +41398,10 @@ var BrainstormGraphClient = (() => {
         compact: Boolean(data.compact),
         onAnswer(answer) {
           if (typeof data.onAnswer === "function") {
-            data.onAnswer(answer);
+            data.onAnswer({
+              ...answer,
+              contextSelection: data.contextSelection || null
+            });
           }
         }
       });
@@ -41430,11 +41454,7 @@ var BrainstormGraphClient = (() => {
   function ViewportDirector({ graph }) {
     const { fitView, getNodes } = useReactFlow();
     const signature = (0, import_react3.useMemo)(() => JSON.stringify({
-      focusNodeId: graph && graph.focusNodeId ? graph.focusNodeId : null,
-      selectedNodeId: graph && graph.selectedNodeId ? graph.selectedNodeId : null,
-      workspaceMode: graph && graph.workspaceMode ? graph.workspaceMode : "focused",
-      fitNodeIds: Array.isArray(graph && graph.fitNodeIds) ? graph.fitNodeIds : [],
-      nodeIds: Array.isArray(graph && graph.nodes) ? graph.nodes.map((node) => node.id) : []
+      layoutSignature: graph && graph.layoutSignature ? graph.layoutSignature : null
     }), [graph]);
     (0, import_react3.useEffect)(() => {
       const frame2 = window.requestAnimationFrame(() => {
@@ -41461,6 +41481,7 @@ var BrainstormGraphClient = (() => {
     return null;
   }
   function GraphCanvas({ graph, onAnswer, onInspect }) {
+    const manualPositionsRef = (0, import_react3.useRef)({});
     const layoutedNodes = (0, import_react3.useMemo)(() => {
       const rawNodes = Array.isArray(graph && graph.nodes) ? graph.nodes : [];
       const rawEdges = Array.isArray(graph && graph.edges) ? graph.edges : [];
@@ -41469,25 +41490,66 @@ var BrainstormGraphClient = (() => {
         data: {
           ...node.data,
           onAnswer,
-          onInspect: () => onInspect(node.id)
+          onInspect: () => onInspect(node.id, node.data && node.data.contextSelection ? node.data.contextSelection : null)
         }
-      })), rawEdges);
+      })), rawEdges).map((node) => {
+        const manualPosition = manualPositionsRef.current[node.id];
+        return manualPosition ? {
+          ...node,
+          position: {
+            x: manualPosition.x,
+            y: manualPosition.y
+          }
+        } : node;
+      });
     }, [graph, onAnswer, onInspect]);
     const edges = (0, import_react3.useMemo)(() => Array.isArray(graph && graph.edges) ? graph.edges : [], [graph]);
     const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes);
     (0, import_react3.useEffect)(() => {
-      setNodes(layoutedNodes);
+      setNodes((currentNodes) => {
+        const currentById = new Map(Array.isArray(currentNodes) ? currentNodes.map((node) => [node.id, node]) : []);
+        return layoutedNodes.map((node) => {
+          const currentNode = currentById.get(node.id);
+          const manualPosition = manualPositionsRef.current[node.id];
+          const nextPosition = manualPosition || (currentNode && currentNode.position ? currentNode.position : node.position);
+          return nextPosition ? {
+            ...node,
+            position: {
+              x: nextPosition.x,
+              y: nextPosition.y
+            }
+          } : node;
+        });
+      });
     }, [layoutedNodes, setNodes]);
+    const handleNodesChange = (0, import_react3.useCallback)((changes) => {
+      changes.forEach((change) => {
+        if (change && change.type === "position" && change.id && change.position) {
+          manualPositionsRef.current[change.id] = {
+            x: change.position.x,
+            y: change.position.y
+          };
+        }
+      });
+      onNodesChange(changes);
+    }, [onNodesChange]);
     return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
       index,
       {
         nodes,
         edges,
         nodeTypes,
-        onNodesChange,
+        onNodesChange: handleNodesChange,
         nodesDraggable: true,
         nodesConnectable: false,
         elementsSelectable: true,
+        deleteKeyCode: null,
+        selectionKeyCode: null,
+        panActivationKeyCode: null,
+        zoomActivationKeyCode: null,
+        disableKeyboardA11y: true,
+        nodesFocusable: false,
+        edgesFocusable: false,
         minZoom: 0.42,
         maxZoom: 1.12,
         proOptions: { hideAttribution: true },
