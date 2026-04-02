@@ -177,6 +177,78 @@ async function runTests() {
     await provider.dispose();
   });
 
+  await test('preserves summaryMarkdown from app-server completions', async () => {
+    let stubClient = null;
+    const provider = createAppServerCodexRuntimeProvider({
+      clientFactory: () => {
+        stubClient = {
+          async startThread() {
+            return { threadId: 'thread-summary-markdown' };
+          },
+          async startTurn() {
+            return { turnId: 'turn-summary-markdown' };
+          },
+          on(eventName, handler) {
+            if (eventName === 'server-request') {
+              this.serverRequestHandler = handler;
+            }
+            if (eventName === 'notification') {
+              this.notificationHandler = handler;
+            }
+          },
+          off() {},
+          async resumeThread() {
+            return { threadId: 'thread-summary-markdown' };
+          },
+          async dispose() {}
+        };
+        return stubClient;
+      }
+    });
+
+    const createPromise = provider.createSession({
+      sessionId: 'app-summary-markdown-1',
+      completionMode: 'artifact',
+      initialPrompt: '浙江考生C9高校高水平三一、强基怎么准备、专业怎么选？'
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    stubClient.notificationHandler({
+      method: 'item/agentMessage/delta',
+      params: {
+        threadId: 'thread-summary-markdown',
+        delta: JSON.stringify({
+          type: 'summary',
+          title: '3套可执行方案对比（基于你当前画像）',
+          summaryMarkdown: [
+            '### 方案A（推荐）',
+            '- 统招主导 + 条件触发机会线',
+            '',
+            '### 方案B',
+            '- 极限C9保层次',
+            '',
+            '**结论**：建议采用方案A。'
+          ].join('\n')
+        })
+      }
+    });
+    stubClient.notificationHandler({
+      method: 'turn/completed',
+      params: {
+        threadId: 'thread-summary-markdown',
+        turn: { id: 'turn-summary-markdown' }
+      }
+    });
+
+    const session = await createPromise;
+    assert.strictEqual(session.currentMessage.type, 'summary');
+    assert.strictEqual(session.currentMessage.title, '3套可执行方案对比（基于你当前画像）');
+    assert(session.currentMessage.summaryMarkdown.includes('### 方案A（推荐）'));
+    assert(session.currentMessage.text.includes('方案A'));
+
+    await provider.dispose();
+  });
+
   await test('recreates a missing app-server thread and continues from persisted history on submit', async () => {
     let startThreadCalls = 0;
     let startTurnCalls = 0;

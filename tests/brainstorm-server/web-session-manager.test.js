@@ -1401,6 +1401,84 @@ async function runTests() {
     assert(!markdown.includes('# Brainstorming artifact'));
   });
 
+  await test('artifact mode preserves summaryMarkdown bodies instead of collapsing to metadata-only markdown', async (tmpDir) => {
+    const runtimeAdapter = {
+      async createSession(input) {
+        return {
+          sessionId: input.sessionId,
+          backendMode: 'app-server',
+          providerSession: { threadId: 'thread-summary-markdown-1' },
+          currentQuestionId: 'question',
+          history: [],
+          currentMessage: {
+            type: 'question',
+            questionType: 'confirm',
+            questionId: 'question',
+            title: '进入方案对比阶段',
+            description: '确认后输出3套方案对比。',
+            options: [
+              { id: 'yes', label: '是' },
+              { id: 'no', label: '否' }
+            ],
+            allowTextOverride: false
+          }
+        };
+      },
+      async submitAnswer(snapshot) {
+        return {
+          ...snapshot,
+          history: [{ questionId: 'question', question: '进入方案对比阶段', answer: '是，先看3套方案对比再定稿' }],
+          currentQuestionId: null,
+          currentMessage: {
+            type: 'summary',
+            title: '3套可执行方案对比（基于你当前画像）',
+            summaryMarkdown: [
+              '### 方案A（推荐）：统招主导 + 条件触发机会线',
+              '- 统招约90%，强基/三一每周3-4小时。',
+              '- 机会线仅保留浙大+上交，主攻物理相关。',
+              '',
+              '### 方案B：极限C9保层次',
+              '- 统招约95%，机会线每周1-2小时。',
+              '',
+              '### 方案C：机会线强化（不建议）',
+              '- 统招85%-88%，机会线提升到5-7小时。',
+              '',
+              '**结论**：按你的目标与约束，建议采用方案A。'
+            ].join('\n')
+          }
+        };
+      }
+    };
+
+    const manager = createSessionManager({ dataDir: tmpDir, runtimeAdapter });
+    const session = await manager.createSession({
+      completionMode: 'artifact',
+      initialPrompt: '浙江考生C9高校高水平三一、强基怎么准备、专业怎么选？'
+    });
+
+    const completed = await manager.submitAnswer(session.id, {
+      type: 'answer',
+      questionId: 'question',
+      answerMode: 'confirm',
+      optionIds: ['yes'],
+      text: null,
+      rawInput: 'yes'
+    });
+
+    assert.strictEqual(completed.currentMessage.type, 'artifact_ready');
+    assert.strictEqual(completed.currentMessage.title, '3套可执行方案对比（基于你当前画像）');
+
+    const markdown = manager.getFinishedResultMarkdown(session.id);
+    assert(markdown.includes('### 方案A（推荐）：统招主导 + 条件触发机会线'));
+    assert(markdown.includes('### 方案B：极限C9保层次'));
+    assert(markdown.includes('**结论**：按你的目标与约束，建议采用方案A。'));
+    assert(!markdown.includes('- Session ID:'));
+
+    const finishedResult = manager.getFinishedResult(session.id);
+    assert.strictEqual(finishedResult.title, '3套可执行方案对比（基于你当前画像）');
+    assert(finishedResult.recommendationSummary.includes('方案A'));
+  });
+
   await test('rejects placeholder artifact_ready payloads that omit the actual artifact body', async (tmpDir) => {
     const runtimeAdapter = {
       async createSession(input) {

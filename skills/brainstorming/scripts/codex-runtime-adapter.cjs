@@ -580,10 +580,14 @@ function normalizeStructuredMessage(payload) {
   }
 
   if (payload.type === 'summary') {
+    const summaryMarkdown = typeof payload.summaryMarkdown === 'string' && payload.summaryMarkdown.trim()
+      ? payload.summaryMarkdown
+      : undefined;
     return {
       type: 'summary',
       title: payload.title || 'Brainstorming Summary',
-      text: payload.text || '',
+      text: payload.text || summaryMarkdown || '',
+      summaryMarkdown,
       path: Array.isArray(payload.path) ? payload.path : [],
       answers: Array.isArray(payload.answers) ? payload.answers : [],
       deliverable: payload.deliverable && typeof payload.deliverable === 'object'

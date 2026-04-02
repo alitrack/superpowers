@@ -3282,7 +3282,11 @@ function createSessionManager(options) {
       session.summary = clone(runtimeState.currentMessage);
       recordMessageProvenance(session, runtimeState.currentMessage);
       if (session.completionMode === 'artifact' && session.workflow.mode !== WORKFLOW_MODES.FULL_SKILL) {
-        session.artifact = createArtifact(session, runtimeState.currentMessage);
+        const summaryMarkdown = typeof runtimeState.currentMessage.summaryMarkdown === 'string'
+          && runtimeState.currentMessage.summaryMarkdown.trim()
+          ? runtimeState.currentMessage.summaryMarkdown
+          : null;
+        session.artifact = createArtifact(session, runtimeState.currentMessage, summaryMarkdown);
         session.currentMessage = {
           type: 'artifact_ready',
           artifactType: session.artifact.artifactType,
