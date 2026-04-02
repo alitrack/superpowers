@@ -4,19 +4,19 @@
 TBD - created by archiving change structured-brainstorming. Update Purpose after archive.
 ## Requirements
 ### Requirement: Hosts present one active answerable question at a time
-The system MUST expose exactly one active answerable user decision at a time, and the host SHALL present that decision as the dominant active node inside a workbench that also exposes the surrounding branch path, checkpoints, and nearby context without turning them into competing answerable questions.
+The system MUST expose exactly one active answerable round at a time, and the host SHALL present that round as the dominant active node inside a workbench where each formal backend question maps to one round node on the tree; option sets belong inside the active round node and MUST NOT become separate peer nodes on the visible graph.
 
-#### Scenario: Current active decision is visible
+#### Scenario: Current active round is visible
 - **WHEN** a session is waiting for the user to answer a question or approval prompt
-- **THEN** the host renders that single decision as the dominant active node and highlights its position within the surrounding branch path
+- **THEN** the host renders that single round as the dominant active node and highlights its place in the current trunk or selected branch lineage
 
-#### Scenario: Prior answers exist
+#### Scenario: Prior rounds exist
 - **WHEN** earlier steps have already been completed
-- **THEN** the host may show the current path, checkpoint markers, and only lightweight nearby context by default while keeping the current active decision primary
+- **THEN** the host shows the answered round path as prior round nodes while keeping the current active round as the only input target by default
 
-#### Scenario: Full history is requested
-- **WHEN** the user explicitly asks to review the full prior thread
-- **THEN** the host reveals the broader branch structure through the workbench without replacing the current active-node focus unless the session is already complete
+#### Scenario: Explicit fork exists
+- **WHEN** the user has explicitly created branch paths from a round
+- **THEN** the host shows those child branches as child round nodes while still allowing only one currently selected round to accept input at a time
 
 ### Requirement: Backend controls question sequencing and branching
 The system SHALL let the backend decide which user-facing question, hidden automation step, review checkpoint, or completion state comes next so workflow behavior stays consistent across hosts and is not hardcoded into individual renderers.
@@ -76,3 +76,4 @@ The system MUST treat each generated formal question as a stable historical node
 #### Scenario: Mainline later advances past the same question
 - **WHEN** the mainline continues after a frozen question has already been used as a branch anchor
 - **THEN** the original question node remains unchanged and both the mainline continuation and any new branch sessions continue as separate descendants of that same node
+

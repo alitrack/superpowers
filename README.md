@@ -116,6 +116,67 @@ Start a new session in your chosen platform and ask for something that should tr
 
 **The agent checks for relevant skills before any task.** Mandatory workflows, not suggestions.
 
+## Brainstorm Web Workbench
+
+This repository also contains an experimental browser-hosted brainstorming workbench used to validate a real Codex-plus-skills flow behind a decision-tree canvas.
+
+The implementation is split across:
+
+- `skills/brainstorming/scripts/server.cjs` - local HTTP server that serves `/app`
+- `skills/brainstorming/scripts/web-app-shell.html` - shell and left-rail workspace UI
+- `skills/brainstorming/scripts/web-mainstage.cjs` - server-side graph/view-model adapter
+- `skills/brainstorming/scripts/web-session-manager.cjs` - session persistence, runtime orchestration, branch runs, lifecycle actions
+- `skills/brainstorming/web-client/src/index.jsx` - source for the XYFlow graph client bundle
+- `skills/brainstorming/scripts/web-graph-client.bundle.js` - bundled browser graph client served by the shell
+
+### Run Locally
+
+Run from the repository root so generated specs and plans land under `docs/superpowers/` instead of an accidental nested working directory:
+
+```bash
+BRAINSTORM_HOST=0.0.0.0 \
+BRAINSTORM_PORT=3341 \
+BRAINSTORM_URL_HOST=localhost \
+BRAINSTORM_DIR=/tmp/brainstorm-live-3341 \
+BRAINSTORM_IDLE_TIMEOUT_MS=0 \
+node skills/brainstorming/scripts/server.cjs
+```
+
+Then open:
+
+```text
+http://localhost:3341/app
+```
+
+Useful environment variables:
+
+- `BRAINSTORM_PORT` - HTTP port for the local server
+- `BRAINSTORM_HOST` - bind host, use `0.0.0.0` when opening from another host
+- `BRAINSTORM_URL_HOST` - host shown in the startup URL
+- `BRAINSTORM_DIR` - runtime data directory for the local browser-host session store
+- `BRAINSTORM_RUNTIME_MODE=fake` - use the fake runtime for deterministic local testing
+
+### Rebuild The Graph Client
+
+The served bundle is built from `skills/brainstorming/web-client/src/index.jsx`:
+
+```bash
+npm --prefix skills/brainstorming/web-client install
+npm --prefix skills/brainstorming/web-client run build
+```
+
+### Targeted Verification
+
+The highest-value regression suite for the workbench is:
+
+```bash
+node tests/brainstorm-server/web-product.test.js
+node tests/brainstorm-server/web-mainstage-state.test.js
+node tests/brainstorm-server/web-session-manager.test.js
+```
+
+These cover the browser shell, graph-state derivation, branch-run semantics, immutable question nodes, and session lifecycle retry/cancel behavior.
+
 ## What's Inside
 
 ### Skills Library

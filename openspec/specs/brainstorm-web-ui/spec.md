@@ -4,23 +4,19 @@
 Define the browser-first brainstorming experience that lets a user complete a structured flow inside the Web UI without terminal dependence.
 ## Requirements
 ### Requirement: The browser can complete a structured brainstorming flow without terminal dependence
-The system MUST let a user start, answer, and complete a structured brainstorming session inside the Web UI without requiring the terminal as the primary interaction channel, and create/submit actions MUST remain usable even when the real runtime needs longer background processing time than a single browser request can reasonably hold open.
+The system MUST let a user start, answer, and complete a structured brainstorming session inside the Web UI without requiring the terminal as the primary interaction channel, and each accepted answer MUST advance the visible workbench by creating or activating the next round node on the same trunk or branch rather than by drawing current option cards as persistent tree nodes.
 
 #### Scenario: Active question is shown in the browser
 - **WHEN** the browser receives the current session message
-- **THEN** it renders the one active structured question or approval decision as the active node of the workbench and submits the normalized `answer` through the product UI
-
-#### Scenario: Answer enters background processing
-- **WHEN** the user submits an answer and the backend accepts it for background execution
-- **THEN** the browser keeps the current question node visible, shows a user-facing processing state, and prevents duplicate submissions for that same active turn
-
-#### Scenario: In-flight session is reopened
-- **WHEN** the user returns to a session whose backend state is still processing
-- **THEN** the browser shows that the session is still running, refreshes from the persisted session API, and updates the workbench when the next `question`, `summary`, or `artifact_ready` arrives
+- **THEN** it renders the one active structured question or approval decision as the active round node of the workbench and keeps its options embedded inside that node as answer controls
 
 #### Scenario: Session advances in the browser
-- **WHEN** the backend returns the next `question`, `summary`, or `artifact_ready`
-- **THEN** the browser updates the workbench directly and keeps the user inside the same branch-oriented product experience instead of instructing the user to switch to the terminal
+- **WHEN** the backend returns the next `question`, `summary`, or `artifact_ready` after an answer is submitted
+- **THEN** the browser appends or activates the next round node in the same workspace and keeps the user inside the same round-oriented product experience
+
+#### Scenario: Explicit fork is requested
+- **WHEN** the user invokes the explicit branch action for multiple shortlisted directions
+- **THEN** the browser creates child round nodes for those branch paths inside the same workspace instead of merely drawing lines to raw option labels
 
 ### Requirement: The product UI hides protocol metadata by default
 The system MUST present a product-facing experience rather than a protocol-debug screen.
@@ -32,3 +28,4 @@ The system MUST present a product-facing experience rather than a protocol-debug
 #### Scenario: User reviews prior progress
 - **WHEN** the browser shows session history or progress
 - **THEN** it uses user-facing labels and summaries rather than raw transport payload fields
+

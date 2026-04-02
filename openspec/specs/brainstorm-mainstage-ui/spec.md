@@ -4,26 +4,22 @@
 Define how the browser brainstorming workspace keeps the current active decision dominant while presenting history, review checkpoints, and finished results with clear visual hierarchy.
 ## Requirements
 ### Requirement: The browser mainstage SHALL keep the current active decision as the dominant focus
-The browser brainstorming product SHALL keep the current active branch or mainline question as the dominant focus of the workbench mainstage, while the surrounding tree remains the navigation surface for understanding and switching between real branch paths.
+The browser brainstorming product SHALL keep the current active branch node and visible graph path as the dominant focus of the workbench mainstage, while workflow stage, request status, and view controls remain secondary shell chrome that MUST NOT compete with the graph for ownership of the screen.
 
 #### Scenario: In-progress session is shown
 - **WHEN** the user opens a brainstorming session that is still waiting for input
-- **THEN** the current active question or approval decision occupies the primary workbench stage while the surrounding tree and context panels remain visually secondary
+- **THEN** the current active question or approval decision occupies the primary workbench stage while workflow stage and request status stay in secondary shell surfaces
 
 #### Scenario: Review checkpoint is shown
 - **WHEN** the session reaches a design or spec review checkpoint
-- **THEN** the draft may be shown in a contextual workbench panel while the single active approval decision remains the primary focus
+- **THEN** the draft may be shown in a contextual inspector surface while the single active approval decision remains the primary focus in the graph
 
-#### Scenario: Mainline question is active
-- **WHEN** the user is working on the current mainline question
-- **THEN** the mainline node is the active focus and branch nodes remain secondary tree context
-
-#### Scenario: Branch question is active
-- **WHEN** the user selects a branch that has its own current question
-- **THEN** that branch node becomes the active focus and the mainline becomes secondary context without losing visibility
+#### Scenario: User changes graph view mode
+- **WHEN** the user switches between focused and overview graph views
+- **THEN** the control appears as lightweight graph-header chrome instead of a separate workflow panel above the canvas
 
 ### Requirement: The browser mainstage SHALL show only lightweight recent context by default
-The browser brainstorming product SHALL show only the current branch path, the most recent `2-3` supporting nodes, and the current workflow stage by default, while allowing the user to expand into broader session history on demand.
+The browser brainstorming product SHALL show only the current branch path, the most recent `2-3` supporting nodes, and lightweight shell state by default, while allowing the user to expand into broader session history on demand.
 
 #### Scenario: Prior steps exist
 - **WHEN** the current session already contains multiple completed steps
@@ -33,20 +29,24 @@ The browser brainstorming product SHALL show only the current branch path, the m
 - **WHEN** the user explicitly requests more context
 - **THEN** the product reveals fuller session history and branch structure through the workbench without replacing the mainstage focus on the current active node
 
+#### Scenario: Earlier history is collapsed
+- **WHEN** older path nodes are hidden from the default graph view
+- **THEN** the visible graph reconnects the topic root to the first visible node instead of leaving a broken or orphaned edge
+
 ### Requirement: The browser mainstage SHALL use a dedicated completion surface for the finished bundle
-The browser brainstorming product SHALL present the finished session inside the same workbench as an outcome-first result surface where the mature brainstorming deliverable stays primary, while the branch path and supporting package remain visible as secondary context.
+The browser brainstorming product SHALL present a completed session inside the same workbench as an outcome-first result surface where the runtime's mature deliverable stays primary, while the branch path and any actual supporting package remain secondary context.
 
-#### Scenario: Session reaches finished completion
-- **WHEN** the workflow completes with a mature deliverable and supporting generated artifacts
-- **THEN** the workbench switches its active stage into a finished-result presentation while keeping the tree path and workspace context visible
+#### Scenario: Conversation-mode session reaches completion
+- **WHEN** a non-full-skill session finishes with a mature deliverable
+- **THEN** the workbench shows the finished runtime result without inventing spec/plan package chrome
 
-#### Scenario: Supporting package is still available after completion
-- **WHEN** the user views a completed session
-- **THEN** the design spec, implementation plan, and result bundle remain visible as supporting workbench context without replacing the finished-result surface as the primary focus
+#### Scenario: Full-skill session reaches completion
+- **WHEN** an explicit full-skill workflow completes with a mature deliverable and supporting generated artifacts
+- **THEN** the workbench switches its active stage into a finished-result presentation while keeping the branch path and the actual supporting package visible as secondary context
 
-#### Scenario: User starts another brainstorm after completion
-- **WHEN** the user wants to begin a new brainstorm while viewing a completed session
-- **THEN** the fresh-topic entry path remains clearly available as a secondary workspace action without hiding or overwriting the completed result by default
+#### Scenario: Supporting package is absent
+- **WHEN** the completed session did not generate spec, plan, or bundle artifacts
+- **THEN** the workbench does not reserve visual space for those absent workflow assets
 
 ### Requirement: The browser mainstage SHALL keep the new-session entry secondary while a session is active
 The browser brainstorming product SHALL keep the entry for starting another brainstorm available inside the workbench, but it MUST remain visually secondary to the active session and MUST NOT reclaim the mainstage while an in-progress or completed session is being viewed.
@@ -73,3 +73,4 @@ The browser brainstorming product SHALL render the decision graph as a top-down 
 #### Scenario: User switches between focused and overview modes
 - **WHEN** the user changes graph density mode
 - **THEN** the graph keeps the same top-down tree direction and only adjusts spacing or visible context density
+

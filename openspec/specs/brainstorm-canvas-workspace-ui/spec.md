@@ -4,15 +4,15 @@
 TBD - created by archiving change brainstorm-canvas-workspace-v1. Update Purpose after archive.
 ## Requirements
 ### Requirement: The browser SHALL present a dedicated brainstorming canvas workspace
-The browser brainstorming product SHALL present each active session inside a dedicated decision-tree workbench where the current active decision is rendered as the primary active node, and the surrounding branch path, sibling directions, checkpoints, and finished result nodes are visible as structured workspace context rather than as a flat set of supporting cards.
+The browser brainstorming product SHALL present each active session inside a dedicated decision-tree workbench where `node0` is the seed topic, each formal backend question or checkpoint is rendered as one round node on the visible tree, and explicit branch subtrees appear only after the user triggers a fork action, instead of keeping current option cards as persistent graph peers.
 
-#### Scenario: In-progress session is shown in the canvas workspace
-- **WHEN** the browser opens a brainstorming session that is still waiting for input
-- **THEN** it renders the current active question or approval decision as the primary active node and shows the surrounding branch path in the same workspace without introducing a second answerable decision
+#### Scenario: Linear session is shown in the canvas workspace
+- **WHEN** the browser opens a brainstorming session that is still moving through one mainline path without an explicit fork
+- **THEN** it renders a single trunk of round nodes such as `topic -> round1 -> round2 -> active round`, and the current options stay inside the active round node rather than appearing as sibling graph nodes
 
-#### Scenario: Review checkpoint is shown in the canvas workspace
-- **WHEN** the session reaches a design or spec review checkpoint
-- **THEN** the workspace keeps the approval decision as the active node while showing the current draft, prior branch path, and checkpoint context as structured supporting workspace surfaces
+#### Scenario: Explicit fork creates visible branch subtrees
+- **WHEN** the user explicitly expands multiple shortlisted directions into branches from a round node
+- **THEN** the canvas renders child round nodes beneath that parent round, one per materialized branch, and each child represents the next branch question or branch state rather than the raw selected option card alone
 
 ### Requirement: The browser SHALL support focused and overview canvas modes
 The browser brainstorming product SHALL let the user switch between a focused workbench mode that emphasizes the current active node and a broader overview mode that exposes more of the same decision-tree structure without changing backend workflow state.

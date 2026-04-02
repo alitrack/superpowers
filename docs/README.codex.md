@@ -120,6 +120,42 @@ Optionally delete the clone: `rm -rf ~/.codex/superpowers` (Windows: `Remove-Ite
 
 Junctions normally work without special permissions. If creation fails, try running PowerShell as administrator.
 
+## Repo-Local Brainstorm Workbench
+
+This repository contains an experimental browser-hosted brainstorming workbench used for validating a real Codex-plus-skills session flow behind a decision-tree canvas.
+
+Run it from the repository root:
+
+```bash
+BRAINSTORM_HOST=0.0.0.0 \
+BRAINSTORM_PORT=3341 \
+BRAINSTORM_URL_HOST=localhost \
+BRAINSTORM_DIR=/tmp/brainstorm-live-3341 \
+BRAINSTORM_IDLE_TIMEOUT_MS=0 \
+node skills/brainstorming/scripts/server.cjs
+```
+
+Open:
+
+```text
+http://localhost:3341/app
+```
+
+If you change the graph UI source, rebuild the served bundle:
+
+```bash
+npm --prefix skills/brainstorming/web-client install
+npm --prefix skills/brainstorming/web-client run build
+```
+
+High-value regressions for this surface:
+
+```bash
+node tests/brainstorm-server/web-product.test.js
+node tests/brainstorm-server/web-mainstage-state.test.js
+node tests/brainstorm-server/web-session-manager.test.js
+```
+
 ## Getting Help
 
 - Report issues: https://github.com/obra/superpowers/issues
